@@ -1,0 +1,34 @@
+version: '3.8'
+services:
+  node_a:
+    build: .
+    ports:
+      - "5001:5001"
+    environment:
+      - NODE_ID=A
+      - PEERS=http://node_b:5002,http://node_c:5003
+    volumes:
+      - ./storage:/app/storage
+    command: python node.py --port 5001
+
+  node_b:
+    build: .
+    ports:
+      - "5002:5002"
+    environment:
+      - NODE_ID=B
+      - PEERS=http://node_a:5001,http://node_c:5003
+    volumes:
+      - ./storage:/app/storage
+    command: python node.py --port 5002
+
+  node_c:
+    build: .
+    ports:
+      - "5003:5003"
+    environment:
+      - NODE_ID=C
+      - PEERS=http://node_a:5001,http://node_b:5002
+    volumes:
+      - ./storage:/app/storage
+    command: python node.py --port 5003

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRDT Shopping Cart Visualizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="background-shapes">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+    </div>
+
+    <header class="app-header">
+        <h1><i class="fa-solid fa-cart-shopping"></i> CRDT Shopping Cart</h1>
+        <p>Distributed Systems: Conflict-free Replicated Data Type</p>
+        <div class="controls">
+            <input type="text" id="session-id" value="user_dat_123" title="Session ID" />
+            <button id="btn-sync-all" class="btn btn-primary"><i class="fa-solid fa-rotate"></i> Global Sync</button>
+        </div>
+    </header>
+
+    <main class="dashboard">
+        <!-- Node A -->
+        <div class="node-card" id="card-node-A" data-node="A" data-port="5001">
+            <div class="node-header">
+                <h2>Node A <span class="badge badge-port">5001</span></h2>
+                <div class="status-indicator">
+                    <div class="dot online"></div>
+                    <span class="status-text">Online</span>
+                </div>
+            </div>
+            <div class="node-body">
+                <div class="add-item-form">
+                    <input type="text" class="input-item" placeholder="Nhập tên sản phẩm...">
+                    <button class="btn btn-add"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <div class="cart-items">
+                    <!-- Items go here -->
+                </div>
+                <div class="raw-data-toggle">
+                    <button class="btn btn-raw"><i class="fa-solid fa-code"></i> Raw Data</button>
+                </div>
+                <pre class="raw-data-view hidden"></pre>
+            </div>
+        </div>
+
+        <!-- Node B -->
+        <div class="node-card" id="card-node-B" data-node="B" data-port="5002">
+            <div class="node-header">
+                <h2>Node B <span class="badge badge-port">5002</span></h2>
+                <div class="status-indicator">
+                    <div class="dot online"></div>
+                    <span class="status-text">Online</span>
+                </div>
+            </div>
+            <div class="node-body">
+                <div class="add-item-form">
+                    <input type="text" class="input-item" placeholder="Nhập tên sản phẩm...">
+                    <button class="btn btn-add"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <div class="cart-items">
+                    <!-- Items go here -->
+                </div>
+                <div class="raw-data-toggle">
+                    <button class="btn btn-raw"><i class="fa-solid fa-code"></i> Raw Data</button>
+                </div>
+                <pre class="raw-data-view hidden"></pre>
+            </div>
+        </div>
+
+        <!-- Node C -->
+        <div class="node-card" id="card-node-C" data-node="C" data-port="5003">
+            <div class="node-header">
+                <h2>Node C <span class="badge badge-port">5003</span></h2>
+                <div class="status-indicator">
+                    <div class="dot online"></div>
+                    <span class="status-text">Online</span>
+                </div>
+            </div>
+            <div class="node-body">
+                <div class="add-item-form">
+                    <input type="text" class="input-item" placeholder="Nhập tên sản phẩm...">
+                    <button class="btn btn-add"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <div class="cart-items">
+                    <!-- Items go here -->
+                </div>
+                <div class="raw-data-toggle">
+                    <button class="btn btn-raw"><i class="fa-solid fa-code"></i> Raw Data</button>
+                </div>
+                <pre class="raw-data-view hidden"></pre>
+            </div>
+        </div>
+    </main>
+
+    <template id="item-template">
+        <div class="cart-item">
+            <div class="item-main">
+                <div class="item-info">
+                    <span class="item-name"></span>
+                    <span class="badge status-badge"></span>
+                </div>
+                <button class="btn-remove" title="Remove"><i class="fa-solid fa-trash"></i></button>
+            </div>
+            <div class="item-meta">
+                <i class="fa-regular fa-clock"></i> <span class="vclock-text"></span>
+            </div>
+        </div>
+    </template>
+
+    <script src="app.js"></script>
+</body>
+</html>
