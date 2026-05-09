@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CRDT Shopping Cart Visualizer</title>
+    <meta name="description" content="Distributed Shopping Cart with CRDT - Version-Based Conflict Resolution Demo" />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap"
       rel="stylesheet"
@@ -24,6 +25,12 @@
     <header class="app-header">
       <h1><i class="fa-solid fa-cart-shopping"></i> CRDT Shopping Cart</h1>
       <p>Distributed Systems: Conflict-free Replicated Data Type</p>
+      <div class="cap-info">
+        <span class="cap-badge cap-a"><i class="fa-solid fa-check-circle"></i> Availability</span>
+        <span class="cap-badge cap-p"><i class="fa-solid fa-check-circle"></i> Partition Tolerance</span>
+        <span class="cap-badge cap-c"><i class="fa-solid fa-xmark-circle"></i> Eventual Consistency</span>
+        <span class="cap-badge cap-w">W=1 · R=1</span>
+      </div>
       <div class="controls">
         <input
           type="text"
@@ -34,6 +41,9 @@
         <button id="btn-sync-all" class="btn btn-primary">
           <i class="fa-solid fa-rotate"></i> Global Sync
         </button>
+        <button id="btn-benchmark" class="btn btn-benchmark">
+          <i class="fa-solid fa-gauge-high"></i> Benchmark
+        </button>
       </div>
     </header>
 
@@ -42,7 +52,7 @@
       <div class="node-card" id="card-node-A" data-node="A" data-port="5001">
         <div class="node-header">
           <div class="node-title-row">
-            <h2>Smartphone <span class="badge badge-port">5001</span></h2>
+            <h2><i class="fa-solid fa-mobile-screen"></i> Smartphone <span class="badge badge-port">5001</span></h2>
             <div class="status-indicator">
               <div class="dot online"></div>
               <span class="status-text">Online</span>
@@ -88,7 +98,7 @@
       <div class="node-card" id="card-node-B" data-node="B" data-port="5002">
         <div class="node-header">
           <div class="node-title-row">
-            <h2>Computer <span class="badge badge-port">5002</span></h2>
+            <h2><i class="fa-solid fa-laptop"></i> Computer <span class="badge badge-port">5002</span></h2>
             <div class="status-indicator">
               <div class="dot online"></div>
               <span class="status-text">Online</span>
@@ -134,7 +144,7 @@
       <div class="node-card" id="card-node-C" data-node="C" data-port="5003">
         <div class="node-header">
           <div class="node-title-row">
-            <h2>Tablet <span class="badge badge-port">5003</span></h2>
+            <h2><i class="fa-solid fa-tablet-screen-button"></i> Tablet <span class="badge badge-port">5003</span></h2>
             <div class="status-indicator">
               <div class="dot online"></div>
               <span class="status-text">Online</span>
@@ -175,7 +185,71 @@
           <pre class="raw-data-view hidden"></pre>
         </div>
       </div>
+
+      <!-- Node D — Horizontal Scaling Demo -->
+      <div class="node-card" id="card-node-D" data-node="D" data-port="5004">
+        <div class="node-header">
+          <div class="node-title-row">
+            <h2><i class="fa-solid fa-server"></i> New Node <span class="badge badge-port">5004</span> <span class="badge badge-scale">SCALE</span></h2>
+            <div class="status-indicator">
+              <div class="dot offline"></div>
+              <span class="status-text">Offline</span>
+            </div>
+          </div>
+          <div class="node-meta-row"></div>
+        </div>
+        <div class="node-body">
+          <div class="add-item-form">
+            <input
+              type="text"
+              class="input-item"
+              placeholder="Nhập tên sản phẩm..."
+            />
+            <button class="btn btn-add">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+          </div>
+          <div class="cart-items">
+            <!-- Items go here -->
+          </div>
+          <div class="raw-data-toggle">
+            <button
+              onclick="clearHistory('D', 5004)"
+              class="btn btn-raw btn-clear-history"
+              style="
+                color: var(--warning);
+                border-color: var(--warning);
+                margin-right: 10px;
+              "
+            >
+              <i class="fa-solid fa-broom"></i> Clean Tombstones
+            </button>
+            <button class="btn btn-raw">
+              <i class="fa-solid fa-code"></i> Raw Data
+            </button>
+          </div>
+          <pre class="raw-data-view hidden"></pre>
+        </div>
+      </div>
     </main>
+
+    <!-- Benchmark Modal -->
+    <div id="benchmark-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2><i class="fa-solid fa-gauge-high"></i> CAP Theorem — Write Latency Analysis</h2>
+          <button class="modal-close" id="btn-close-benchmark">&times;</button>
+        </div>
+        <div class="modal-body" id="benchmark-results">
+          <p class="text-muted">Nhấn "Run Benchmark" để đo write latency trên từng node...</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" id="btn-run-benchmark">
+            <i class="fa-solid fa-play"></i> Run Benchmark
+          </button>
+        </div>
+      </div>
+    </div>
 
     <template id="item-template">
       <div class="cart-item">

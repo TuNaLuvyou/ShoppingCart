@@ -1,9 +1,10 @@
 // CRDT Shopping Cart - Constants Module
 
 export const NODES = [
-  { id: "A", p: 5001 },
-  { id: "B", p: 5002 },
-  { id: "C", p: 5003 },
+  { id: "A", p: 5001, label: "Smartphone" },
+  { id: "B", p: 5002, label: "Computer" },
+  { id: "C", p: 5003, label: "Tablet" },
+  { id: "D", p: 5004, label: "New Node (Scale)" },
 ];
 
 export const CONFIG = {
