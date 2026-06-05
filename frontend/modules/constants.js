@@ -1,4 +1,4 @@
-// CRDT Shopping Cart - Constants Module
+// CRDT Shopping Cart - Module Hằng số
 
 export const NODES = [
   { id: "A", p: 5001, label: "Smartphone" },
@@ -28,7 +28,7 @@ export const SELECTORS = {
   inputItem: ".input-item",
 };
 
-// Global State
+// Trạng thái Toàn cục (Global State)
 export const cache = {};
 export const nodeStatus = NODES.reduce(
   (acc, n) => ({ ...acc, [n.id]: false }),

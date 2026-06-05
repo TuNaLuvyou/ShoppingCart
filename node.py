@@ -10,17 +10,20 @@ from core.merge import merge_carts
 
 app = Flask(__name__)
 CORS(app)
+# Hằng số cấu hình
 NODE_ID = os.environ.get("NODE_ID", "A")
 PEERS = list(filter(None, os.environ.get("PEERS", "").split(",")))
 STORAGE_DIR = "storage"
 STORAGE_FILE = f"{STORAGE_DIR}/node_{NODE_ID}_db.json"
+REQUEST_TIMEOUT = 1
+SYNC_TIMEOUT = 2
 
 # ─── In-Memory Cache ───────────────────────────────────────────────
-# Tránh đọc file JSON mỗi request → cải thiện hiệu năng đáng kể
+# Bộ nhớ tạm (cache) cơ sở dữ liệu để tránh đọc file JSON mỗi request
 _db_cache = None
 
 def load_db():
-    """Đọc database từ cache (in-memory) hoặc từ file nếu cache trống"""
+    """Tải cơ sở dữ liệu từ cache (in-memory) hoặc từ file nếu cache trống"""
     global _db_cache
     if _db_cache is not None:
         return _db_cache
@@ -32,7 +35,7 @@ def load_db():
     return _db_cache
 
 def save_db(db):
-    """Ghi database vào cả cache (in-memory) lẫn file (persistence)"""
+    """Lưu cơ sở dữ liệu vào cả cache (in-memory) lẫn file (persistence)"""
     global _db_cache
     _db_cache = db
     os.makedirs(STORAGE_DIR, exist_ok=True)
@@ -41,46 +44,87 @@ def save_db(db):
 
 # ─── Cart API ──────────────────────────────────────────────────────
 
+def _get_cart(db, session_id):
+    """Lấy hoặc tạo mới giỏ hàng cho phiên bản (session)."""
+    if session_id not in db:
+        db[session_id] = {"version": 0, "items": {}}
+    return db[session_id]
+
+def _replicate_to_peers(session_id, cart):
+    """Gửi dữ liệu giỏ hàng tới tất cả các node khác."""
+    for peer in PEERS:
+        try:
+            requests.post(f"{peer}/replicate/{session_id}", json=cart, timeout=REQUEST_TIMEOUT)
+        except requests.exceptions.RequestException:
+            pass
+
 @app.route('/cart/<session_id>', methods=['GET'])
 def get_cart(session_id):
     db = load_db()
-    cart = db.get(session_id, {"items": {}})
+    cart = _get_cart(db, session_id)
     # Ẩn các item đã bị xóa (Tombstone) khỏi người dùng
     active_items = [k for k, v in cart["items"].items() if v["status"] == "active"]
-    return jsonify({"session_id": session_id, "active_items": active_items, "raw_data": cart})
+    return jsonify({
+        "session_id": session_id,
+        "version": cart.get("version", 0),
+        "active_items": active_items,
+        "raw_data": cart
+    })
 
 @app.route('/cart/<session_id>/<action>', methods=['POST'])
 def modify_cart(session_id, action):
-    if action not in ["add", "remove"]: 
+    if action not in ["add", "remove", "increase", "decrease"]:
         return jsonify({"error": "Invalid action"}), 400
+    
+    item_name = request.json.get("item") if request.json else None
+    if not item_name:
+        return jsonify({"error": "Item name required"}), 400
         
-    item_name = request.json.get("item")
+    # Chuẩn hóa tên sản phẩm: bỏ khoảng trắng thừa và viết hoa chữ cái đầu
+    item_name = item_name.strip().title()
+    
     db = load_db()
+    cart = _get_cart(db, session_id)
+    current_item = cart["items"].get(item_name, {"status": "active", "vclock": {}, "quantity": {}})
     
-    if session_id not in db:
-        db[session_id] = {"items": {}}
+    qty_dict = current_item.get("quantity", {})
+    if not isinstance(qty_dict, dict):
+        qty_dict = {NODE_ID: current_item.get("quantity", 0)}
+    else:
+        qty_dict = dict(qty_dict) # copy để tránh lỗi tham chiếu
         
-    cart = db[session_id]
-    current_item = cart["items"].get(item_name, {"status": "active", "vclock": {}})
+    current_node_qty = qty_dict.get(NODE_ID, 0)
     
-    # Cập nhật trạng thái và Vector Clock
-    status = "active" if action == "add" else "deleted"
+    if action == "add":
+        status = "active"
+        if current_item.get("status") == "deleted":
+            qty_dict = {NODE_ID: 1}
+        else:
+            qty_dict[NODE_ID] = current_node_qty + 1
+    elif action == "increase":
+        status = "active"
+        qty_dict[NODE_ID] = current_node_qty + 1
+    elif action == "decrease":
+        status = "active"
+        qty_dict[NODE_ID] = current_node_qty - 1
+    else: # xóa
+        status = "deleted"
+        qty_dict = {}
+
     new_vclock = increment_clock(current_item.get("vclock", {}), NODE_ID)
     
-    cart["items"][item_name] = {"status": status, "vclock": new_vclock}
+    cart["items"][item_name] = {"status": status, "vclock": new_vclock, "quantity": qty_dict}
+    cart["version"] = cart.get("version", 0) + 1
     save_db(db)
     
-    # Active Replication: Đẩy dữ liệu sang các peer (fire-and-forget, W=1)
-    # W=1 nghĩa là chỉ cần ghi cục bộ thành công là trả về cho client
-    # → Đảm bảo Availability trong CAP Theorem
-    for peer in PEERS:
-        if peer:
-            try:
-                requests.post(f"{peer}/replicate/{session_id}", json=cart, timeout=1)
-            except requests.exceptions.RequestException:
-                pass  # Peer offline → sẽ đồng bộ sau qua Anti-Entropy
-                
-    return jsonify({"message": f"Item {action}ed at Node {NODE_ID}", "cart": cart})
+    # Đồng bộ tới các node khác
+    _replicate_to_peers(session_id, cart)
+    
+    return jsonify({
+        "message": f"Item {action}ed at Node {NODE_ID}",
+        "version": cart.get("version", 0),
+        "cart": cart
+    })
 
 # ─── Replication & Sync ────────────────────────────────────────────
 
@@ -89,7 +133,7 @@ def replicate(session_id):
     """Active Replication: Nhận dữ liệu từ peer và merge"""
     incoming_cart = request.json
     db = load_db()
-    local_cart = db.get(session_id, {"items": {}})
+    local_cart = _get_cart(db, session_id)
     
     merged_cart = merge_carts(local_cart, incoming_cart)
     db[session_id] = merged_cart
@@ -104,11 +148,11 @@ def sync_all():
     for peer in PEERS:
         if peer:
             try:
-                resp = requests.get(f"{peer}/dump", timeout=2)
+                resp = requests.get(f"{peer}/dump", timeout=SYNC_TIMEOUT)
                 if resp.status_code == 200:
                     peer_db = resp.json()
                     for session_id, incoming_cart in peer_db.items():
-                        local_cart = db.get(session_id, {"items": {}})
+                        local_cart = _get_cart(db, session_id)
                         db[session_id] = merge_carts(local_cart, incoming_cart)
             except requests.exceptions.RequestException:
                 pass
@@ -128,10 +172,13 @@ def health_check():
 def clear_db():
     """Dọn dẹp Tombstone: Xóa vật lý các item đã bị đánh dấu 'deleted'"""
     db = load_db()
-    for session_id in db:
-        cart = db[session_id]
-        # Chỉ giữ lại các món có status là 'active'
-        cart["items"] = {k: v for k, v in cart["items"].items() if v["status"] == "active"}
+    for session_id, cart in db.items():
+        # Chỉ giữ lại các sản phẩm đang có, xóa các thẻ đánh dấu xóa (tombstones)
+        cart["items"] = {
+            k: v for k, v in cart["items"].items()
+            if v["status"] == "active"
+        }
+        cart["version"] = cart.get("version", 0) + 1
     save_db(db)
     return jsonify({"status": "cleaned"})
 

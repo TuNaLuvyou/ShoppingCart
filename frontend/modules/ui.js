@@ -14,6 +14,14 @@ import { getIsUpdating, setIsUpdating } from "./state.js";
 export const renderItemHTML = (name, info, nodeId, nodePort) => {
   const isActive = info.status === "active";
   const vclockStr = JSON.stringify(info.vclock || {}).replace(/"/g, "");
+  let totalQty = 1;
+  if (typeof info.quantity === 'object') {
+      totalQty = Object.values(info.quantity).reduce((a, b) => a + b, 0);
+  } else if (info.quantity !== undefined) {
+      totalQty = info.quantity;
+  }
+  totalQty = Math.max(1, totalQty);
+
   return `
     <div class="cart-item ${info.status === "deleted" ? "is-deleted" : ""}">
       <div class="item-main">
@@ -21,7 +29,12 @@ export const renderItemHTML = (name, info, nodeId, nodePort) => {
         <div style="display: flex; align-items: center; gap: 5px;">
           ${info.isPending ? `<span class="badge badge-pending" style="font-size: 0.6rem; padding: 0.1rem 0.3rem; animation: pulse-pending 2s infinite;">Pending</span>` : ""}
           <span class="badge status-badge ${info.status}">${info.status}</span>
-          ${isActive ? `<button onclick="doAction('${nodeId}', ${nodePort}, 'remove', '${name}')" class="btn-remove"><i class="fa-solid fa-trash"></i></button>` : ""}
+          ${isActive ? `
+          <button onclick="doAction('${nodeId}', ${nodePort}, 'decrease', '${name}')" class="btn-qty" style="padding: 2px 6px; font-size: 0.8rem; cursor: pointer; border-radius: 4px; background: rgba(255, 255, 255, 0.1); border: 1px solid var(--border-color); color: white;">-</button>
+          <span style="font-weight: bold; margin: 0 5px;">${totalQty}</span>
+          <button onclick="doAction('${nodeId}', ${nodePort}, 'increase', '${name}')" class="btn-qty" style="padding: 2px 6px; font-size: 0.8rem; cursor: pointer; border-radius: 4px; background: rgba(255, 255, 255, 0.1); border: 1px solid var(--border-color); color: white;">+</button>
+          <button onclick="doAction('${nodeId}', ${nodePort}, 'remove', '${name}')" class="btn-remove" style="margin-left: 5px;"><i class="fa-solid fa-trash"></i></button>
+          ` : ""}
         </div>
       </div>
       <div class="item-meta"><i class="fa-regular fa-clock"></i> ${vclockStr}</div>
@@ -65,11 +78,37 @@ export const updateUI = async () => {
           const currentItem = displayData.raw_data.items[op.item] || {
             status: "active",
             vclock: {},
+            quantity: {}
           };
-          const status = op.action === "add" ? "active" : "deleted";
+          
+          let status = currentItem.status;
+          let qtyDict = currentItem.quantity;
+          if (typeof qtyDict !== 'object') qtyDict = { [n.id]: qtyDict || 1 };
+          
+          let myQty = qtyDict[n.id] || 0;
+          
+          if (op.action === "add") {
+             status = "active";
+             myQty = currentItem.status === "deleted" ? 1 : myQty + 1;
+          } else if (op.action === "increase") {
+             status = "active";
+             myQty += 1;
+          } else if (op.action === "decrease") {
+             status = "active";
+             myQty -= 1;
+          } else if (op.action === "remove") {
+             status = "deleted";
+             qtyDict = {};
+          }
+          
+          if (op.action !== "remove") {
+             qtyDict = { ...qtyDict, [n.id]: myQty };
+          }
+          
           displayData.raw_data.items[op.item] = {
             ...currentItem,
             status,
+            quantity: qtyDict,
             isPending: true,
           };
         }

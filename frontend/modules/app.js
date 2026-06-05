@@ -1,4 +1,4 @@
-// CRDT Shopping Cart - Main App Module
+// CRDT Shopping Cart - Module Ứng dụng chính
 
 import { NODES, CONFIG, SELECTORS, cache, nodeStatus } from "./constants.js";
 import { getSessionId, addToQueue, showToast } from "./storage.js";
@@ -6,7 +6,7 @@ import { call } from "./api.js";
 import { processQueue } from "./queue.js";
 import { updateUI } from "./ui.js";
 
-// Global Functions for HTML onclick handlers
+// Các hàm toàn cục (Global) cho các sự kiện onclick trên HTML
 window.doAction = async (id, port, act, item) => {
   const sid = getSessionId();
   cache[id] = null;
@@ -130,7 +130,7 @@ const runBenchmark = async () => {
   resultsDiv.innerHTML = html;
 };
 
-// Initialize Event Listeners
+// Khởi tạo các bộ lắng nghe sự kiện (Event Listeners)
 const initEventListeners = () => {
   NODES.forEach((n) => {
     const card = document.querySelector(SELECTORS.nodeCard(n.id));
@@ -138,8 +138,12 @@ const initEventListeners = () => {
 
     card.querySelector(SELECTORS.btnAdd).onclick = () => {
       const input = card.querySelector(SELECTORS.inputItem);
-      if (input.value) {
-        doAction(n.id, n.p, "add", input.value);
+      if (input.value.trim()) {
+        const itemName = input.value.trim()
+          .split(' ')
+          .map(w => w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : '')
+          .join(' ');
+        doAction(n.id, n.p, "add", itemName);
         input.value = "";
       }
     };
@@ -176,7 +180,7 @@ const initEventListeners = () => {
   };
 };
 
-// Start Application
+// Khởi động Ứng dụng
 initEventListeners();
 setInterval(updateUI, CONFIG.UI_UPDATE_INTERVAL);
 updateUI();
