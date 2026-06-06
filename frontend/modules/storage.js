@@ -1,6 +1,6 @@
 // CRDT Shopping Cart - Storage Module
 
-import { CONFIG, SELECTORS } from "./constants.js";
+import { CONFIG } from "./constants.js";
 
 export const getQueue = () => {
   try {
@@ -49,5 +49,4 @@ export const getDefaultCart = (sessionId) => ({
   raw_data: { version: 0, items: {} },
 });
 
-export const getSessionId = () =>
-  document.querySelector(SELECTORS.sessionInput).value || "user_dat_123";
+export const getSessionId = () => "cart_session_001";

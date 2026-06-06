@@ -1,10 +1,8 @@
 // CRDT Shopping Cart - Constants Module
 
 export const NODES = [
-  { id: "A", p: 5001, label: "Smartphone" },
-  { id: "B", p: 5002, label: "Computer" },
-  { id: "C", p: 5003, label: "Tablet" },
-  { id: "D", p: 5004, label: "New Node (Scale)" },
+  { id: "A", p: 5001, label: "Phone" },
+  { id: "B", p: 5002, label: "Laptop" },
 ];
 
 export const CONFIG = {
@@ -17,7 +15,6 @@ export const CONFIG = {
 };
 
 export const SELECTORS = {
-  sessionInput: "#session-id",
   syncBtn: "#btn-sync-all",
   nodeCard: (id) => `#card-node-${id}`,
   cartItems: ".cart-items",

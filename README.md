@@ -31,15 +31,15 @@ Hệ thống cho phép người dùng thao tác thêm/xóa sản phẩm từ nhi
    ```bash
    docker compose up --build
    ```
-   Hệ thống sẽ chạy 3 node tương ứng với 3 thiết bị độc lập:
+   Hệ thống sẽ chạy các node tương ứng với các thiết bị độc lập:
    - **Node A** (Smartphone): `http://localhost:5001`
    - **Node B** (Computer): `http://localhost:5002`
-   - **Node C** (Tablet): `http://localhost:5003`
 
 2. **Cài thư viện Python (dành cho kịch bản test):**
    ```bash
-   pip install requests
+   pip install flask flask-cors
    ```
+   > Lưu ý: `demo.py` và `benchmark.py` gọi trực tiếp thuật toán Python nội bộ, không cần Docker hay `requests`.
 
 ---
 
@@ -60,7 +60,7 @@ python demo.py
 ```
 
 ### 3.3. Sử dụng Script kiểm thử hiệu năng (Benchmark)
-Chạy script kiểm thử tải để đo write latency, thời gian merge và kiểm tra độ chính xác của thuật toán:
+Chạy script đo hiệu năng thuật toán CRDT thuần (không cần Docker). Gồm 5 giai đoạn: khởi tạo → ghi W=1 → replicate → giả lập xung đột → merge và chốt thời gian từng bước:
 ```bash
 python benchmark.py
 ```
@@ -102,6 +102,6 @@ shopping-cart-crdt/
 ├── demo.py                  # Kịch bản giả lập xung đột dữ liệu
 ├── benchmark.py             # Script đo write latency, merge time và độ chính xác
 ├── Dockerfile               # File cấu hình build image cho các node
-├── docker-compose.yml       # Định nghĩa Cluster (Node A, B, C và Node D động)
+├── docker-compose.yml       # Định nghĩa Cluster (Node A, B và Node D động)
 └── requirements.txt         # Các thư viện phụ thuộc của Python
 ```

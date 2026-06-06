@@ -13,7 +13,8 @@ def merge_carts(cart1, cart2):
             merged_items[key] = item1
         elif item2 and not item1:
             merged_items[key] = item2
-        else:
+        else: 
+            #khi sync (thao tác trên cùng món hàng sẽ bị xung đột)
             rel = compare_clocks(item1["vclock"], item2["vclock"])
             if rel == 'vc1_newer':
                 merged_items[key] = item1

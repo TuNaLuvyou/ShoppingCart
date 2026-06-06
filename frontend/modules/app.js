@@ -4,7 +4,16 @@ import { NODES, CONFIG, SELECTORS, cache, nodeStatus } from "./constants.js";
 import { getSessionId, addToQueue, showToast } from "./storage.js";
 import { call } from "./api.js";
 import { processQueue } from "./queue.js";
-import { updateUI } from "./ui.js";
+import { updateUI, addDynamicNode } from "./ui.js";
+import {
+  buildLogPanel, updateCountBadge,
+  logAdd, logRemove, logOffline, logOnline, logQueue,
+  logSync, logMerge, logTombstone, logInfo, logError, logReplicate,
+} from "./logger.js";
+
+// Build log panel on startup
+buildLogPanel();
+logInfo("Nodes registered: Phone (5001), Laptop (5002)");
 
 // Global Functions for HTML onclick handlers
 window.doAction = async (id, port, act, item) => {
@@ -15,18 +24,36 @@ window.doAction = async (id, port, act, item) => {
     console.log(`📱 Offline: Queuing ${act} ${item} to Node ${id}`);
     addToQueue(id, port, sid, act, item);
     showToast(`Thao tác được lưu. Bấm Sync để đồng bộ.`);
+    logQueue(id, act, item);
+    logOffline(id);
+    updateCountBadge();
     updateUI();
     return;
   }
 
+  // Log before call
+  if (act === "add") logAdd(id, item, null);
+  else logRemove(id, item, null);
+  updateCountBadge();
+
   const result = await call(port, `/cart/${sid}/${act}`, "POST", { item });
   if (result) {
     console.log(`✅ Success: ${id} ${act} ${item}`);
+    // Log the resulting vclock if available
+    const vclock = result?.cart?.items?.[item]?.vclock;
+    if (act === "add") logAdd(id, item, vclock);
+    else logRemove(id, item, vclock);
+    // Try to log replication to peers (fire-and-forget indicator)
+    NODES.filter((n) => n.id !== id).forEach((peer) => {
+      logReplicate(id, peer.id, item);
+    });
   } else {
     console.log(`⚠️ API failed for Node ${id}: Queuing operation`);
     addToQueue(id, port, sid, act, item);
+    logError(id, `API unreachable — "${item}" queued for later sync`);
   }
 
+  updateCountBadge();
   updateUI();
 };
 
@@ -45,110 +72,94 @@ window.clearHistory = async (id, port) => {
   }
 
   cache[id] = null;
-  await call(port, "/clear", "POST");
+  const result = await call(port, "/clear", "POST");
+  if (result) logTombstone(id, "all");
+  updateCountBadge();
   updateUI();
 };
 
-// ─── Benchmark (CAP Theorem Analysis) ─────────────────────────────
+// ─── Dynamic Node (Horizontal Scaling Demo) ───────────────────────
+let dynamicNodeCounter = 0;
+const DYNAMIC_NODE_IDS = ["C", "D", "E", "F"];
+const DYNAMIC_NODE_PORTS = [5003, 5004, 5005, 5006];
+const DYNAMIC_NODE_ICONS = [
+  "fa-tablet-screen-button",
+  "fa-tv",
+  "fa-desktop",
+  "fa-server",
+];
 
-const runBenchmark = async () => {
-  const resultsDiv = document.getElementById("benchmark-results");
-  resultsDiv.innerHTML = `<div class="benchmark-loading"><i class="fa-solid fa-spinner fa-spin"></i> Đang đo write latency trên tất cả node...</div>`;
+const initAddNodeModal = () => {
+  const modal = document.getElementById("add-node-modal");
+  const btnOpen = document.getElementById("btn-add-node");
+  const btnClose = document.getElementById("btn-close-add-node");
+  const btnConfirm = document.getElementById("btn-confirm-add-node");
+  const nameInput = document.getElementById("new-node-name");
 
-  const benchResults = [];
+  btnOpen.onclick = () => {
+    nameInput.value = "";
+    modal.classList.remove("hidden");
+    setTimeout(() => nameInput.focus(), 100);
+  };
 
-  for (const n of NODES) {
-    const result = await call(n.p, "/metrics/write-test", "POST");
-    benchResults.push({ node: n, result });
-  }
+  btnClose.onclick = () => modal.classList.add("hidden");
+  modal.onclick = (e) => { if (e.target === modal) modal.classList.add("hidden"); };
 
-  let html = `
-    <div class="benchmark-summary">
-      <div class="cap-explanation">
-        <h3>📐 CAP Theorem Analysis</h3>
-        <p>Hệ thống chọn <strong>AP</strong> (Availability + Partition Tolerance), hy sinh Strong Consistency:</p>
-        <ul>
-          <li><strong>W = 1</strong>: Ghi chỉ cần thành công tại node cục bộ → client nhận phản hồi ngay</li>
-          <li><strong>R = 1</strong>: Đọc từ node cục bộ, không cần quorum</li>
-          <li><strong>Eventual Consistency</strong>: CRDT merge đảm bảo hội tụ khi sync</li>
-        </ul>
-      </div>
-    </div>
-    <div class="benchmark-table-wrapper">
-      <table class="benchmark-table">
-        <thead>
-          <tr>
-            <th>Node</th>
-            <th>Local Write (ms)</th>
-            <th>Replication</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-  `;
+  nameInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") btnConfirm.click();
+  });
 
-  for (const { node, result } of benchResults) {
-    if (!result) {
-      html += `
-        <tr class="bench-offline">
-          <td><strong>Node ${node.id}</strong> (${node.label})</td>
-          <td colspan="3" class="text-muted">⬚ Offline — Không kết nối được</td>
-        </tr>
-      `;
-      continue;
+  btnConfirm.onclick = () => {
+    if (dynamicNodeCounter >= DYNAMIC_NODE_IDS.length) {
+      showToast("Đã đạt giới hạn node demo!");
+      modal.classList.add("hidden");
+      return;
     }
 
-    const repDetails = result.replication
-      .map((r) => {
-        const latency = r.latency_ms !== null ? `${r.latency_ms}ms` : "N/A";
-        const icon = r.status === "ok" ? "✅" : "⚠️";
-        return `${icon} ${r.peer.split("//")[1]}: ${latency}`;
-      })
-      .join("<br>");
+    const label = nameInput.value.trim() || `Node ${DYNAMIC_NODE_IDS[dynamicNodeCounter]}`;
+    const nodeId = DYNAMIC_NODE_IDS[dynamicNodeCounter];
+    const port = DYNAMIC_NODE_PORTS[dynamicNodeCounter];
+    const icon = DYNAMIC_NODE_ICONS[dynamicNodeCounter];
+    dynamicNodeCounter++;
 
-    html += `
-      <tr>
-        <td><strong>Node ${result.node}</strong> (${node.label})</td>
-        <td class="latency-value ${result.local_write_ms < 10 ? 'latency-good' : 'latency-warn'}">${result.local_write_ms} ms</td>
-        <td class="rep-details">${repDetails}</td>
-        <td class="latency-good">✅ W=1 OK</td>
-      </tr>
-    `;
-  }
+    // Register node globally
+    NODES.push({ id: nodeId, p: port, label });
+    nodeStatus[nodeId] = false;
+    cache[nodeId] = null;
 
-  html += `
-        </tbody>
-      </table>
-    </div>
-    <div class="benchmark-conclusion">
-      <p><i class="fa-solid fa-circle-info"></i> <strong>Kết luận:</strong> 
-      Local write luôn &lt; 10ms (W=1). Replication là fire-and-forget — 
-      nếu peer offline, dữ liệu sẽ được đồng bộ sau qua Anti-Entropy (/sync).</p>
-    </div>
-  `;
+    // Render the new node card (inserted BEFORE the log panel)
+    addDynamicNode(nodeId, port, label, icon);
+    modal.classList.add("hidden");
+    showToast(`✅ Đã thêm node "${label}" (port ${port}) — Horizontal Scaling!`);
+    logInfo(`🆕 Horizontal Scaling: Node ${nodeId} "${label}" joined cluster on port ${port}`);
+    updateCountBadge();
 
-  resultsDiv.innerHTML = html;
+    bindNodeCard(nodeId);
+    updateUI();
+  };
 };
 
-// Initialize Event Listeners
+// ─── Event Listeners ──────────────────────────────────────────────
+
+const bindNodeCard = (nodeId) => {
+  const card = document.querySelector(SELECTORS.nodeCard(nodeId));
+  if (!card) return;
+
+  card.querySelector(SELECTORS.btnAdd).onclick = () => {
+    const input = card.querySelector(SELECTORS.inputItem);
+    if (input.value.trim()) {
+      const n = NODES.find((x) => x.id === nodeId);
+      doAction(nodeId, n.p, "add", input.value.trim());
+      input.value = "";
+    }
+  };
+
+  card.querySelector(".raw-data-toggle .btn-raw:not(.btn-clear-history)").onclick = () =>
+    card.querySelector(SELECTORS.rawDataView).classList.toggle("hidden");
+};
+
 const initEventListeners = () => {
-  NODES.forEach((n) => {
-    const card = document.querySelector(SELECTORS.nodeCard(n.id));
-    if (!card) return; // Node card might not exist yet
-
-    card.querySelector(SELECTORS.btnAdd).onclick = () => {
-      const input = card.querySelector(SELECTORS.inputItem);
-      if (input.value) {
-        doAction(n.id, n.p, "add", input.value);
-        input.value = "";
-      }
-    };
-
-    card.querySelector(
-      ".raw-data-toggle .btn-raw:not(.btn-clear-history)",
-    ).onclick = () =>
-      card.querySelector(SELECTORS.rawDataView).classList.toggle("hidden");
-  });
+  NODES.forEach((n) => bindNodeCard(n.id));
 
   // Global Sync
   document.querySelector(SELECTORS.syncBtn).onclick = async (e) => {
@@ -156,24 +167,44 @@ const initEventListeners = () => {
     btn.innerHTML = '<i class="fa-solid fa-rotate fa-spin"></i> Syncing...';
     NODES.forEach((n) => (cache[n.id] = null));
     const onlineNodes = NODES.filter((n) => nodeStatus[n.id]);
+
+    logInfo(`🔄 Global Sync triggered — ${onlineNodes.length} node(s) online`);
+    updateCountBadge();
+
     await processQueue(onlineNodes.map((n) => n.id));
-    await Promise.all(onlineNodes.map((n) => call(n.p, "/sync", "POST")));
+    const syncResults = await Promise.all(
+      onlineNodes.map((n) => call(n.p, "/sync", "POST"))
+    );
+
+    // Log sync results
+    onlineNodes.forEach((n, i) => {
+      const res = syncResults[i];
+      if (res) {
+        logSync(n.id, "peers");
+        const sessions = res.db ? Object.keys(res.db) : [];
+        sessions.forEach((sid) => {
+          const cart = res.db[sid];
+          const items = Object.entries(cart.items || {});
+          if (items.length > 0) {
+            logMerge(n.id, sid, {
+              items: items.length,
+              active: items.filter(([, v]) => v.status === "active").length,
+              deleted: items.filter(([, v]) => v.status === "deleted").length,
+            });
+          }
+        });
+        updateCountBadge();
+      } else {
+        logError(n.id, "Sync failed — node may be unreachable");
+        updateCountBadge();
+      }
+    });
+
     await updateUI();
     btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Global Sync';
   };
 
-  // Benchmark Modal
-  const modal = document.getElementById("benchmark-modal");
-  document.getElementById("btn-benchmark").onclick = () => {
-    modal.classList.remove("hidden");
-  };
-  document.getElementById("btn-close-benchmark").onclick = () => {
-    modal.classList.add("hidden");
-  };
-  document.getElementById("btn-run-benchmark").onclick = runBenchmark;
-  modal.onclick = (e) => {
-    if (e.target === modal) modal.classList.add("hidden");
-  };
+  initAddNodeModal();
 };
 
 // Start Application

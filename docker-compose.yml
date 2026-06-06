@@ -5,7 +5,7 @@ services:
       - "5001:5001"
     environment:
       - NODE_ID=A
-      - PEERS=http://node_b:5002,http://node_c:5003
+      - PEERS=http://node_b:5002
     volumes:
       - node_a_data:/app/storage
     command: python node.py --port 5001
@@ -16,21 +16,10 @@ services:
       - "5002:5002"
     environment:
       - NODE_ID=B
-      - PEERS=http://node_a:5001,http://node_c:5003
+      - PEERS=http://node_a:5001
     volumes:
       - node_b_data:/app/storage
     command: python node.py --port 5002
-
-  node_c:
-    build: .
-    ports:
-      - "5003:5003"
-    environment:
-      - NODE_ID=C
-      - PEERS=http://node_a:5001,http://node_b:5002
-    volumes:
-      - node_c_data:/app/storage
-    command: python node.py --port 5003
 
   # Node D - Demo horizontal scaling (chỉ chạy khi: docker compose --profile scale up)
   node_d:
@@ -39,7 +28,7 @@ services:
       - "5004:5004"
     environment:
       - NODE_ID=D
-      - PEERS=http://node_a:5001,http://node_b:5002,http://node_c:5003
+      - PEERS=http://node_a:5001,http://node_b:5002
     volumes:
       - node_d_data:/app/storage
     command: python node.py --port 5004
@@ -49,5 +38,4 @@ services:
 volumes:
   node_a_data:
   node_b_data:
-  node_c_data:
   node_d_data:
