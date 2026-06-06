@@ -13,21 +13,31 @@ const _prevVersion = {};
 export const renderItemHTML = (name, info, nodeId, nodePort) => {
   const isActive  = info.status === "active";
   const vclockStr = JSON.stringify(info.vclock || {}).replace(/"/g, "");
+  let totalQty = 1;
+  if (typeof info.quantity === 'object') {
+    totalQty = Object.values(info.quantity).reduce((a, b) => a + b, 0);
+  } else if (info.quantity !== undefined) {
+    totalQty = info.quantity;
+  }
+  totalQty = Math.max(1, totalQty);
+
   const pendingBadge = info.isPending
-    ? `<span class="text-[0.6rem] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 anim-pulse">Pending</span>`
+    ? `<span class="badge badge-pending" style="font-size: 0.6rem; padding: 0.1rem 0.3rem;">Pending</span>`
     : "";
-  const statusBadge = isActive
-    ? `<span class="text-[0.65rem] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">active</span>`
-    : `<span class="text-[0.65rem] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 line-through">deleted</span>`;
-  const removeBtn = isActive
-    ? `<button onclick="doAction('${nodeId}',${nodePort},'remove','${name}')" class="text-slate-500 hover:text-red-400 transition-colors ml-1"><i class="fa-solid fa-trash text-xs"></i></button>`
-    : "";
+
   return `
-    <div class="bg-black/20 border border-white/5 rounded-lg px-4 py-3 transition-all hover:border-white/20 anim-fade-in ${!isActive ? "opacity-50" : ""}">
-      <div class="flex justify-between items-center mb-1">
-        <span class="font-semibold text-sm ${!isActive ? "line-through text-slate-400" : ""}">${name}</span>
-        <div class="flex items-center gap-1.5">
-          ${pendingBadge}${statusBadge}${removeBtn}
+    <div class="cart-item ${info.status === "deleted" ? "is-deleted" : ""} ${!isActive ? "opacity-50" : ""}">
+      <div class="item-main">
+        <span class="item-name ${!isActive ? "line-through text-slate-400" : ""}">${name}</span>
+        <div style="display: flex; align-items: center; gap: 5px;">
+          ${pendingBadge}
+          <span class="badge status-badge ${info.status}">${info.status}</span>
+          ${isActive ? `
+          <button onclick="doAction('${nodeId}', ${nodePort}, 'decrease', '${name}')" class="btn-qty">-</button>
+          <span style="font-weight: bold; margin: 0 5px;">${totalQty}</span>
+          <button onclick="doAction('${nodeId}', ${nodePort}, 'increase', '${name}')" class="btn-qty">+</button>
+          <button onclick="doAction('${nodeId}', ${nodePort}, 'remove', '${name}')" class="btn-remove"><i class="fa-solid fa-trash"></i></button>
+          ` : ""}
         </div>
       </div>
       <div class="text-xs text-slate-500 flex items-center gap-1.5">
@@ -66,8 +76,42 @@ export const updateUI = async () => {
       if (displayData?.raw_data) {
         displayData.raw_data.items = displayData.raw_data.items || {};
         for (const op of nodePendingOps) {
-          const cur = displayData.raw_data.items[op.item] || { status: "active", vclock: {} };
-          displayData.raw_data.items[op.item] = { ...cur, status: op.action === "add" ? "active" : "deleted", isPending: true };
+          const currentItem = displayData.raw_data.items[op.item] || {
+            status: "active",
+            vclock: {},
+            quantity: {}
+          };
+
+          let status = currentItem.status;
+          let qtyDict = currentItem.quantity;
+          if (typeof qtyDict !== 'object') qtyDict = { [n.id]: qtyDict || 1 };
+
+          let myQty = qtyDict[n.id] || 0;
+
+          if (op.action === "add") {
+            status = "active";
+            myQty = currentItem.status === "deleted" ? 1 : myQty + 1;
+          } else if (op.action === "increase") {
+            status = "active";
+            myQty += 1;
+          } else if (op.action === "decrease") {
+            status = "active";
+            myQty = Math.max(0, myQty - 1);
+          } else if (op.action === "remove") {
+            status = "deleted";
+            qtyDict = {};
+          }
+
+          if (op.action !== "remove") {
+            qtyDict = { ...qtyDict, [n.id]: myQty };
+          }
+
+          displayData.raw_data.items[op.item] = {
+            ...currentItem,
+            status,
+            quantity: qtyDict,
+            isPending: true,
+          };
         }
       }
 

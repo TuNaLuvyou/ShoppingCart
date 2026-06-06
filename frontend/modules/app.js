@@ -1,4 +1,4 @@
-// CRDT Shopping Cart - Main App Module
+// CRDT Shopping Cart - Module Ứng dụng chính
 
 import { NODES, CONFIG, SELECTORS, cache, nodeStatus } from "./constants.js";
 import { getSessionId, addToQueue, showToast } from "./storage.js";
@@ -15,7 +15,7 @@ import {
 buildLogPanel();
 logInfo("Nodes registered: Phone (5001), Laptop (5002)");
 
-// Global Functions for HTML onclick handlers
+// Các hàm toàn cục (Global) cho các sự kiện onclick trên HTML
 window.doAction = async (id, port, act, item) => {
   const sid = getSessionId();
   cache[id] = null;
@@ -158,6 +158,7 @@ const bindNodeCard = (nodeId) => {
     card.querySelector(SELECTORS.rawDataView).classList.toggle("hidden");
 };
 
+// Khởi tạo các bộ lắng nghe sự kiện (Event Listeners)
 const initEventListeners = () => {
   NODES.forEach((n) => bindNodeCard(n.id));
 
@@ -207,7 +208,7 @@ const initEventListeners = () => {
   initAddNodeModal();
 };
 
-// Start Application
+// Khởi động Ứng dụng
 initEventListeners();
 setInterval(updateUI, CONFIG.UI_UPDATE_INTERVAL);
 updateUI();
