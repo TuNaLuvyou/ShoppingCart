@@ -50,7 +50,7 @@ def _get_cart(db, session_id):
         db[session_id] = {"version": 0, "items": {}}
     return db[session_id]
 
-def _replicate_to_peers(session_id, cart):
+def _replicate_to_peers(session_id, cart): # Gửi dữ liệu qua các node còn lại
     """Active Replication: gửi cart tới tất cả node khác (fire-and-forget, W=1)."""
     for peer in PEERS: # chuyển dữ liệu qua các node còn lại!
         try:
