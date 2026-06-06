@@ -23,7 +23,7 @@ SYNC_TIMEOUT    = 2
 _db_cache = None
 
 def load_db():
-    """Đọc database từ cache (in-memory) hoặc file nếu cache trống. R=1"""
+    """Đọc database từ cache (in-memory) hoặc file, nếu cache trống. R=1"""
     global _db_cache
     if _db_cache is not None:
         return _db_cache
@@ -85,15 +85,11 @@ def modify_cart(session_id, action): # thêm hoặc xóa sản phẩm
     # Chuẩn hóa tên sản phẩm
     item_name = item_name.strip().title()
 
-    db   = load_db()  # R = 1
+    db = load_db()  # R = 1
     cart = _get_cart(db, session_id)
     current_item = cart["items"].get(item_name, {"status": "active", "vclock": {}, "quantity": {}})
 
-    qty_dict = current_item.get("quantity", {})
-    if not isinstance(qty_dict, dict):
-        qty_dict = {NODE_ID: current_item.get("quantity", 0)}
-    else:
-        qty_dict = dict(qty_dict)  # copy để tránh lỗi tham chiếu
+    qty_dict = dict(current_item.get("quantity", {}))  # copy để tránh lỗi tham chiếu
 
     current_node_qty = qty_dict.get(NODE_ID, 0)
 
