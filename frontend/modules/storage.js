@@ -46,7 +46,7 @@ export const getDefaultCart = (sessionId) => ({
   session_id: sessionId,
   version: 0,
   active_items: [],
-  raw_data: { version: 0, items: {} },
+  raw_data: { version: 0, ItemList: {} },
 });
 
 export const getSessionId = () => "cart_session_001";

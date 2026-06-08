@@ -3,11 +3,11 @@ from core.vector_clock import compare_clocks, merge_clocks
 def merge_carts(cart1, cart2):
     """Hop nhat 2 gio hang dua tren Vector Clock va Tombstone - OR-Set CRDT"""
     merged_items = {}
-    all_keys = set(cart1.get("items", {}).keys()) | set(cart2.get("items", {}).keys())
+    all_keys = set(cart1.get("ItemList", {}).keys()) | set(cart2.get("ItemList", {}).keys())
 
     for key in all_keys:
-        item1 = cart1.get("items", {}).get(key)
-        item2 = cart2.get("items", {}).get(key)
+        item1 = cart1.get("ItemList", {}).get(key)
+        item2 = cart2.get("ItemList", {}).get(key)
 
         if item1 and not item2:
             merged_items[key] = item1
@@ -35,4 +35,4 @@ def merge_carts(cart1, cart2):
     # Lay version cao nhat tu 2 cart
     merged_version = max(cart1.get("version", 0), cart2.get("version", 0))
 
-    return {"version": merged_version, "items": merged_items}
+    return {"version": merged_version, "ItemList": merged_items}

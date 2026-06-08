@@ -23,6 +23,7 @@ services:
 
   # Node C - Demo horizontal scaling (chỉ chạy khi: docker compose --profile scale up)
   # docker compose --profile scale up node_c -d
+  # curl -X POST http://localhost:5003/sync
   node_c:
     build: .
     ports:

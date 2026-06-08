@@ -34,7 +34,7 @@ window.doAction = async (id, port, act, item) => {
   if (result) {
     console.log(`✅ Success: ${id} ${act} ${item}`);
     // Log một lần duy nhất sau khi API trả về, kèm vclock thực tế
-    const vclock = result?.cart?.items?.[item]?.vclock;
+    const vclock = result?.cart?.ItemList?.[item]?.vclock;
     if (act === "add") logAdd(id, item, vclock);
     else logRemove(id, item, vclock);
     // Ghi log replication fire-and-forget sang các peer
@@ -120,7 +120,7 @@ const initEventListeners = () => {
         const sessions = res.db ? Object.keys(res.db) : [];
         sessions.forEach((sid) => {
           const cart  = res.db[sid];
-          const items = Object.entries(cart.items || {});
+          const items = Object.entries(cart.ItemList || {});
           if (items.length > 0) {
             logMerge(n.id, sid, {
               items:   items.length,

@@ -60,14 +60,14 @@ const renderNodeUI = (n, isOnline, data, sid) => {
   const queue = getQueue();
   const nodePendingOps = queue.filter((op) => op.nodeId === n.id);
   if (displayData?.raw_data) {
-    displayData.raw_data.items = displayData.raw_data.items || {};
+    displayData.raw_data.ItemList = displayData.raw_data.ItemList || {};
     for (const op of nodePendingOps) {
-      const currentItem = displayData.raw_data.items[op.item] || {
+      const currentItem = displayData.raw_data.ItemList[op.item] || {
         status: "active",
         vclock: {},
       };
       const status = op.action === "add" ? "active" : "deleted";
-      displayData.raw_data.items[op.item] = {
+      displayData.raw_data.ItemList[op.item] = {
         ...currentItem,
         status,
         isPending: true,
@@ -98,7 +98,7 @@ const renderNodeUI = (n, isOnline, data, sid) => {
   _prevStatus[n.id] = isOnline;
 
   // ── Meta row ──
-  const items   = displayData.raw_data?.items || {};
+  const items   = displayData.raw_data?.ItemList || {};
   const active  = Object.values(items).filter((i) => i.status === "active").length;
   const version = displayData.version ?? displayData.raw_data?.version ?? 0;
 

@@ -41,11 +41,11 @@ def save_db(db):
 def get_cart(db, sid):
     """Lấy giỏ hàng theo Session ID. Tự khởi tạo giỏ rỗng nếu chưa tồn tại."""
     if sid not in db:
-        db[sid] = {"version": 0, "items": {}}
+        db[sid] = {"version": 0, "ItemList": {}}
     return db[sid]
 
 # ─── Anti-Entropy ──────────────────────────────────────────────────
-def sync_with_peers(): # Sau khi mở rộng bằng docker xong thì hệ thống sẽ tự động merge dữ liệu qua
+def sync_with_peers(): # khi bấm Sync
     """Passive Anti-Entropy: kéo toàn bộ dữ liệu từ các peer và thực hiện CRDT-merge.
     Chỉ ghi file xuống đĩa khi có sự thay đổi thực sự, tránh ghi thừa."""
     db, changed = load_db(), False
@@ -72,11 +72,11 @@ def api_get_cart(sid):
     Lọc ẩn các Tombstone (status=deleted) khỏi người dùng, chỉ hiển thị sản phẩm active."""
     db   = load_db()
     cart = get_cart(db, sid)
-    active = [k for k, v in cart["items"].items() if v["status"] == "active"]
+    active = [k for k, v in cart["ItemList"].items() if v["status"] == "active"]
     return jsonify({"session_id": sid, "version": cart["version"], "active_items": active, "raw_data": cart})
 
 @app.post("/cart/<sid>/<action>")
-def api_modify(sid, action):
+def api_modify(sid, action): # Khi bấm dấu + hoặc nút xoá
     """[POST] Thêm (add) hoặc xóa logic (remove) sản phẩm khỏi giỏ hàng
     (khi người dùng bấm nút [+] hoặc nút [Xóa] trên giao diện).
     Xóa dùng cơ chế Tombstone (status=deleted) để giữ lịch sử và đồng bộ xung đột đúng.
@@ -90,8 +90,8 @@ def api_modify(sid, action):
 
     db   = load_db()
     cart = get_cart(db, sid)
-    curr = cart["items"].get(item, {"status": "active", "vclock": {}})
-    cart["items"][item] = {"status": "active" if action == "add" else "deleted",
+    curr = cart["ItemList"].get(item, {"status": "active", "vclock": {}})
+    cart["ItemList"][item] = {"status": "active" if action == "add" else "deleted",
                            "vclock": increment_clock(curr["vclock"], NODE_ID)}
     cart["version"] += 1
     save_db(db)
@@ -142,7 +142,7 @@ def api_clear():
     Lưu ý: chỉ thực hiện sau khi chắc chắn tất cả node đã đồng bộ xong."""
     db = load_db()
     for cart in db.values():
-        cart["items"] = {k: v for k, v in cart["items"].items() if v["status"] == "active"}
+        cart["ItemList"] = {k: v for k, v in cart["ItemList"].items() if v["status"] == "active"}
     save_db(db)
     return jsonify({"status": "cleaned"})
 
