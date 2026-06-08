@@ -1,5 +1,0 @@
-Refactor: Đổi tên trường dữ liệu từ 'items' sang 'ItemList' để đồng bộ schema
-
-- Cập nhật schema JSON ở backend (node.py, merge.py)
-- Cập nhật schema truy xuất dữ liệu ở frontend (app.js, storage.js, ui.js)
-- Thêm chú thích hướng dẫn chạy test curl trong file cấu hình docker
