@@ -67,7 +67,7 @@ def sync_with_peers(): # khi bấm Sync
 
 # ─── API Routes ────────────────────────────────────────────────────
 @app.get("/cart/<sid>")
-def api_get_cart(sid):
+def api_get_cart(sid): #tự động lấy danh sách sản phẩm hiển thị lên giao diện
     """[GET] Trả về danh sách sản phẩm của giỏ hàng (giao diện tự gọi định kỳ để cập nhật UI).
     Lọc ẩn các Tombstone (status=deleted) khỏi người dùng, chỉ hiển thị sản phẩm active."""
     db   = load_db()
@@ -91,8 +91,7 @@ def api_modify(sid, action): # Khi bấm dấu + hoặc nút xoá
     db   = load_db()
     cart = get_cart(db, sid)
     curr = cart["ItemList"].get(item, {"status": "active", "vclock": {}})
-    cart["ItemList"][item] = {"status": "active" if action == "add" else "deleted",
-                           "vclock": increment_clock(curr["vclock"], NODE_ID)}
+    cart["ItemList"][item] = {"status": "active" if action == "add" else "deleted", "vclock": increment_clock(curr["vclock"], NODE_ID)}
     cart["version"] += 1
     save_db(db)
 
@@ -104,10 +103,11 @@ def api_modify(sid, action): # Khi bấm dấu + hoặc nút xoá
                 requests.post(f"{peer}/replicate/{sid}", json=snapshot, timeout=1)
             except Exception:
                 pass
+    # sử dụng threading.Thread để thực hiện việc replicate một cách bất đồng bộ
     threading.Thread(target=replicate, daemon=True).start() # Luồng chạy ngầm
     return jsonify({"message": f"{item} {action}d at Node {NODE_ID}", "version": cart["version"], "cart": cart})
 
-@app.post("/replicate/<sid>")
+@app.post("/replicate/<sid>") # nhận dữ liệu sau khi api_modify thực thi xong
 def api_replicate(sid):
     """[POST] Nhận dữ liệu replicate từ peer và thực hiện CRDT-merge với bản cục bộ
     (tự động gọi ngầm khi một node khác bấm [+] hoặc [Xoá] — Active Replication).
