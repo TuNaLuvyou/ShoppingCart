@@ -66,10 +66,15 @@ python benchmark.py
 ```
 
 ### 3.4. Mô phỏng thêm nút mới (Horizontal Scaling)
-Để mở rộng hệ thống thêm **Node D (Cổng 5004)** trực tiếp khi cluster đang chạy:
+Để mở rộng hệ thống thêm **Node C (Cổng 5003)** trực tiếp khi cluster đang chạy:
 ```bash
-docker compose --profile scale up node_d -d
+docker compose --profile scale up node_c --build -d
 ```
+Sau khi Node C khởi động, nó chưa có dữ liệu. Kích hoạt giao thức tham gia (Join Protocol) bằng cách gọi Anti-Entropy thủ công trên Node C:
+```bash
+curl -X POST http://localhost:5003/sync
+```
+Mở file `storage/node_C_db.json` để kiểm chứng toàn bộ giỏ hàng đã được CRDT-merge sang Node mới.
 
 ### 3.5. Mô phỏng Phân rã mạng
 ```bash
@@ -102,6 +107,6 @@ shopping-cart-crdt/
 ├── demo.py                  # Kịch bản giả lập xung đột dữ liệu
 ├── benchmark.py             # Script đo write latency, merge time và độ chính xác
 ├── Dockerfile               # File cấu hình build image cho các node
-├── docker-compose.yml       # Định nghĩa Cluster (Node A, B và Node D động)
+├── docker-compose.yml       # Định nghĩa Cluster (Node A, B và Node C scale động)
 └── requirements.txt         # Các thư viện phụ thuộc của Python
 ```

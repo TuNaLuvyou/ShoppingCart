@@ -24,26 +24,20 @@ window.doAction = async (id, port, act, item) => {
     console.log(`📱 Offline: Queuing ${act} ${item} to Node ${id}`);
     addToQueue(id, port, sid, act, item);
     showToast(`Thao tác được lưu. Bấm Sync để đồng bộ.`);
-    logQueue(id, act, item);
-    logOffline(id);
+    logQueue(id, act, item);  // chỉ log thao tác bị queue, không log offline lặp
     updateCountBadge();
     updateUI();
     return;
   }
 
-  // Log before call
-  if (act === "add") logAdd(id, item, null);
-  else logRemove(id, item, null);
-  updateCountBadge();
-
   const result = await call(port, `/cart/${sid}/${act}`, "POST", { item });
   if (result) {
     console.log(`✅ Success: ${id} ${act} ${item}`);
-    // Log the resulting vclock if available
+    // Log một lần duy nhất sau khi API trả về, kèm vclock thực tế
     const vclock = result?.cart?.items?.[item]?.vclock;
     if (act === "add") logAdd(id, item, vclock);
     else logRemove(id, item, vclock);
-    // Try to log replication to peers (fire-and-forget indicator)
+    // Ghi log replication fire-and-forget sang các peer
     NODES.filter((n) => n.id !== id).forEach((peer) => {
       logReplicate(id, peer.id, item);
     });
@@ -78,66 +72,7 @@ window.clearHistory = async (id, port) => {
   updateUI();
 };
 
-// ─── Dynamic Node (Horizontal Scaling Demo) ───────────────────────
-let dynamicNodeCounter = 0;
-const DYNAMIC_NODE_IDS = ["C", "D", "E", "F"];
-const DYNAMIC_NODE_PORTS = [5003, 5004, 5005, 5006];
-const DYNAMIC_NODE_ICONS = [
-  "fa-tablet-screen-button",
-  "fa-tv",
-  "fa-desktop",
-  "fa-server",
-];
 
-const initAddNodeModal = () => {
-  const modal = document.getElementById("add-node-modal");
-  const btnOpen = document.getElementById("btn-add-node");
-  const btnClose = document.getElementById("btn-close-add-node");
-  const btnConfirm = document.getElementById("btn-confirm-add-node");
-  const nameInput = document.getElementById("new-node-name");
-
-  btnOpen.onclick = () => {
-    nameInput.value = "";
-    modal.classList.remove("hidden");
-    setTimeout(() => nameInput.focus(), 100);
-  };
-
-  btnClose.onclick = () => modal.classList.add("hidden");
-  modal.onclick = (e) => { if (e.target === modal) modal.classList.add("hidden"); };
-
-  nameInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") btnConfirm.click();
-  });
-
-  btnConfirm.onclick = () => {
-    if (dynamicNodeCounter >= DYNAMIC_NODE_IDS.length) {
-      showToast("Đã đạt giới hạn node demo!");
-      modal.classList.add("hidden");
-      return;
-    }
-
-    const label = nameInput.value.trim() || `Node ${DYNAMIC_NODE_IDS[dynamicNodeCounter]}`;
-    const nodeId = DYNAMIC_NODE_IDS[dynamicNodeCounter];
-    const port = DYNAMIC_NODE_PORTS[dynamicNodeCounter];
-    const icon = DYNAMIC_NODE_ICONS[dynamicNodeCounter];
-    dynamicNodeCounter++;
-
-    // Register node globally
-    NODES.push({ id: nodeId, p: port, label });
-    nodeStatus[nodeId] = false;
-    cache[nodeId] = null;
-
-    // Render the new node card (inserted BEFORE the log panel)
-    addDynamicNode(nodeId, port, label, icon);
-    modal.classList.add("hidden");
-    showToast(`✅ Đã thêm node "${label}" (port ${port}) — Horizontal Scaling!`);
-    logInfo(`🆕 Horizontal Scaling: Node ${nodeId} "${label}" joined cluster on port ${port}`);
-    updateCountBadge();
-
-    bindNodeCard(nodeId);
-    updateUI();
-  };
-};
 
 // ─── Event Listeners ──────────────────────────────────────────────
 
@@ -158,7 +93,7 @@ const bindNodeCard = (nodeId) => {
     card.querySelector(SELECTORS.rawDataView).classList.toggle("hidden");
 };
 
-// Khởi tạo các bộ lắng nghe sự kiện (Event Listeners)
+// Khởi tạo các bộ lắng nghe sự kiện
 const initEventListeners = () => {
   NODES.forEach((n) => bindNodeCard(n.id));
 
@@ -177,19 +112,19 @@ const initEventListeners = () => {
       onlineNodes.map((n) => call(n.p, "/sync", "POST"))
     );
 
-    // Log sync results
+    // Log kết quả sync
     onlineNodes.forEach((n, i) => {
       const res = syncResults[i];
       if (res) {
         logSync(n.id, "peers");
         const sessions = res.db ? Object.keys(res.db) : [];
         sessions.forEach((sid) => {
-          const cart = res.db[sid];
+          const cart  = res.db[sid];
           const items = Object.entries(cart.items || {});
           if (items.length > 0) {
             logMerge(n.id, sid, {
-              items: items.length,
-              active: items.filter(([, v]) => v.status === "active").length,
+              items:   items.length,
+              active:  items.filter(([, v]) => v.status === "active").length,
               deleted: items.filter(([, v]) => v.status === "deleted").length,
             });
           }
@@ -204,9 +139,7 @@ const initEventListeners = () => {
     await updateUI();
     btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Global Sync';
   };
-
-  initAddNodeModal();
-};
+}
 
 // Khởi động Ứng dụng
 initEventListeners();

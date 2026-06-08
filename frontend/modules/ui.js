@@ -3,39 +3,28 @@
 import { NODES, SELECTORS, cache, nodeStatus } from "./constants.js";
 import { getQueue, getLocalCart, saveLocalCart, getDefaultCart, getSessionId } from "./storage.js";
 import { call } from "./api.js";
-import { getIsUpdating, setIsUpdating } from "./state.js";
 import { logOnline, logOffline, logVersion, updateCountBadge } from "./logger.js";
 
 const _prevStatus  = {};
 const _prevVersion = {};
 
-// ─── Item HTML (Tailwind) ─────────────────────────────────────────
+// ─── Item HTML ────────────────────────────────────────────────────
 export const renderItemHTML = (name, info, nodeId, nodePort) => {
   const isActive  = info.status === "active";
   const vclockStr = JSON.stringify(info.vclock || {}).replace(/"/g, "");
-  let totalQty = 1;
-  if (typeof info.quantity === 'object') {
-    totalQty = Object.values(info.quantity).reduce((a, b) => a + b, 0);
-  } else if (info.quantity !== undefined) {
-    totalQty = info.quantity;
-  }
-  totalQty = Math.max(1, totalQty);
 
   const pendingBadge = info.isPending
     ? `<span class="badge badge-pending" style="font-size: 0.6rem; padding: 0.1rem 0.3rem;">Pending</span>`
     : "";
 
   return `
-    <div class="cart-item ${info.status === "deleted" ? "is-deleted" : ""} ${!isActive ? "opacity-50" : ""}">
-      <div class="item-main">
-        <span class="item-name ${!isActive ? "line-through text-slate-400" : ""}">${name}</span>
-        <div style="display: flex; align-items: center; gap: 5px;">
+    <div class="cart-item bg-slate-900/60 border border-white/10 rounded-xl p-3 flex flex-col gap-2 transition-all duration-200 ${info.status === "deleted" ? "is-deleted border-red-500/20 bg-red-500/5" : "hover:border-white/20"} ${!isActive ? "opacity-50" : ""}">
+      <div class="item-main flex justify-between items-center">
+        <span class="item-name font-medium ${!isActive ? "line-through text-slate-500" : "text-slate-100"}">${name}</span>
+        <div style="display: flex; align-items: center; gap: 6px;">
           ${pendingBadge}
           <span class="badge status-badge ${info.status}">${info.status}</span>
           ${isActive ? `
-          <button onclick="doAction('${nodeId}', ${nodePort}, 'decrease', '${name}')" class="btn-qty">-</button>
-          <span style="font-weight: bold; margin: 0 5px;">${totalQty}</span>
-          <button onclick="doAction('${nodeId}', ${nodePort}, 'increase', '${name}')" class="btn-qty">+</button>
           <button onclick="doAction('${nodeId}', ${nodePort}, 'remove', '${name}')" class="btn-remove"><i class="fa-solid fa-trash"></i></button>
           ` : ""}
         </div>
@@ -47,132 +36,121 @@ export const renderItemHTML = (name, info, nodeId, nodePort) => {
     </div>`;
 };
 
-// ─── Update UI ────────────────────────────────────────────────────
-export const updateUI = async () => {
-  if (getIsUpdating()) return;
-  setIsUpdating(true);
-  try {
-    const sid = getSessionId();
-    const results = await Promise.all(
-      NODES.map(async (n) => ({ n, data: await call(n.p, `/cart/${sid}`) }))
-    );
+const nodeUpdating = {};
 
-    for (const { n, data } of results) {
-      const card = document.querySelector(SELECTORS.nodeCard(n.id));
-      if (!card) continue;
+const renderNodeUI = (n, isOnline, data, sid) => {
+  const card = document.querySelector(SELECTORS.nodeCard(n.id));
+  if (!card) return;
 
-      const isOnline = !!data;
-      nodeStatus[n.id] = isOnline;
+  nodeStatus[n.id] = isOnline;
 
-      let displayData = data;
-      if (isOnline) {
-        saveLocalCart(sid, n.id, data);
-      } else {
-        displayData = getLocalCart(sid, n.id) || getDefaultCart(sid);
-      }
-
-      const queue = getQueue();
-      const nodePendingOps = queue.filter((op) => op.nodeId === n.id);
-      if (displayData?.raw_data) {
-        displayData.raw_data.items = displayData.raw_data.items || {};
-        for (const op of nodePendingOps) {
-          const currentItem = displayData.raw_data.items[op.item] || {
-            status: "active",
-            vclock: {},
-            quantity: {}
-          };
-
-          let status = currentItem.status;
-          let qtyDict = currentItem.quantity;
-          if (typeof qtyDict !== 'object') qtyDict = { [n.id]: qtyDict || 1 };
-
-          let myQty = qtyDict[n.id] || 0;
-
-          if (op.action === "add") {
-            status = "active";
-            myQty = currentItem.status === "deleted" ? 1 : myQty + 1;
-          } else if (op.action === "increase") {
-            status = "active";
-            myQty += 1;
-          } else if (op.action === "decrease") {
-            status = "active";
-            myQty = Math.max(0, myQty - 1);
-          } else if (op.action === "remove") {
-            status = "deleted";
-            qtyDict = {};
-          }
-
-          if (op.action !== "remove") {
-            qtyDict = { ...qtyDict, [n.id]: myQty };
-          }
-
-          displayData.raw_data.items[op.item] = {
-            ...currentItem,
-            status,
-            quantity: qtyDict,
-            isPending: true,
-          };
-        }
-      }
-
-      const stateStr = JSON.stringify({ isOnline, displayData, pendingOpsCount: nodePendingOps.length });
-      if (stateStr === cache[n.id]) continue;
-      cache[n.id] = stateStr;
-
-      // ── Offline class ──
-      card.classList.toggle("node-offline", !isOnline);
-
-      // ── Status indicator ──
-      const indicator = card.querySelector(SELECTORS.indicator);
-      if (isOnline) {
-        indicator.innerHTML = `<div class="dot w-2.5 h-2.5 rounded-full bg-emerald-500 dot-glow"></div><span class="status-text text-sm">Online</span>`;
-      } else {
-        indicator.innerHTML = `<div class="dot w-2.5 h-2.5 rounded-full bg-red-500"></div><span class="status-text text-sm">Offline</span>`;
-      }
-
-      // ── Log changes ──
-      if (_prevStatus[n.id] !== undefined && _prevStatus[n.id] !== isOnline) {
-        isOnline ? logOnline(n.id) : logOffline(n.id);
-        updateCountBadge();
-      }
-      _prevStatus[n.id] = isOnline;
-
-      // ── Meta row ──
-      const items   = displayData.raw_data?.items || {};
-      const active  = Object.values(items).filter((i) => i.status === "active").length;
-      const version = displayData.version ?? displayData.raw_data?.version ?? 0;
-
-      if (_prevVersion[n.id] !== undefined && _prevVersion[n.id] !== version) {
-        logVersion(n.id, version, _prevVersion[n.id]);
-        updateCountBadge();
-      }
-      _prevVersion[n.id] = version;
-
-      const syncBadge = nodePendingOps.length > 0
-        ? `<span class="text-xs font-semibold px-2 py-0.5 rounded-full ${isOnline ? "bg-blue-500/20 text-blue-300" : "bg-amber-500/20 text-amber-300 anim-pulse"}">${isOnline ? `↻ ${nodePendingOps.length}` : `${nodePendingOps.length} pending`}</span>`
-        : "";
-      card.querySelector(SELECTORS.metaRow).innerHTML = `
-        <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">${active} items</span>
-        <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">v${version}</span>
-        ${syncBadge}`;
-
-      // ── Cart items ──
-      const itemsHTML = Object.entries(items)
-        .map(([name, info]) => renderItemHTML(name, info, n.id, n.p))
-        .join("") ||
-        (isOnline
-          ? `<div class="text-slate-500 text-center py-8 text-sm">Giỏ hàng trống</div>`
-          : `<div class="text-slate-500 text-center py-8 text-sm"><i class="fa-solid fa-plug-circle-xmark mb-2 block text-xl"></i>Giỏ hàng trống (Offline)</div>`);
-      card.querySelector(SELECTORS.cartItems).innerHTML = itemsHTML;
-
-      card.querySelector(SELECTORS.rawDataView).innerText = JSON.stringify(displayData.raw_data, null, 2);
-    }
-  } finally {
-    setIsUpdating(false);
+  let displayData = data;
+  if (isOnline && data) {
+    saveLocalCart(sid, n.id, data);
+  } else {
+    displayData = getLocalCart(sid, n.id) || getDefaultCart(sid);
   }
+
+  // Clone to avoid mutating cached data
+  if (displayData) {
+    displayData = JSON.parse(JSON.stringify(displayData));
+  }
+
+  // Overlay các thao tác đang chờ (Pending) để hiển thị optimistic UI
+  const queue = getQueue();
+  const nodePendingOps = queue.filter((op) => op.nodeId === n.id);
+  if (displayData?.raw_data) {
+    displayData.raw_data.items = displayData.raw_data.items || {};
+    for (const op of nodePendingOps) {
+      const currentItem = displayData.raw_data.items[op.item] || {
+        status: "active",
+        vclock: {},
+      };
+      const status = op.action === "add" ? "active" : "deleted";
+      displayData.raw_data.items[op.item] = {
+        ...currentItem,
+        status,
+        isPending: true,
+      };
+    }
+  }
+
+  const stateStr = JSON.stringify({ isOnline, displayData, pendingOpsCount: nodePendingOps.length });
+  if (stateStr === cache[n.id]) return;
+  cache[n.id] = stateStr;
+
+  // ── Offline class ──
+  card.classList.toggle("node-offline", !isOnline);
+
+  // ── Status indicator ──
+  const indicator = card.querySelector(SELECTORS.indicator);
+  if (isOnline) {
+    indicator.innerHTML = `<div class="dot w-2.5 h-2.5 rounded-full bg-emerald-500 dot-glow"></div><span class="status-text text-sm">Online</span>`;
+  } else {
+    indicator.innerHTML = `<div class="dot w-2.5 h-2.5 rounded-full bg-red-500"></div><span class="status-text text-sm">Offline</span>`;
+  }
+
+  // ── Log thay đổi trạng thái ──
+  if (_prevStatus[n.id] !== undefined && _prevStatus[n.id] !== isOnline) {
+    isOnline ? logOnline(n.id) : logOffline(n.id);
+    updateCountBadge();
+  }
+  _prevStatus[n.id] = isOnline;
+
+  // ── Meta row ──
+  const items   = displayData.raw_data?.items || {};
+  const active  = Object.values(items).filter((i) => i.status === "active").length;
+  const version = displayData.version ?? displayData.raw_data?.version ?? 0;
+
+  if (_prevVersion[n.id] !== undefined && _prevVersion[n.id] !== version) {
+    logVersion(n.id, version, _prevVersion[n.id]);
+    updateCountBadge();
+  }
+  _prevVersion[n.id] = version;
+
+  const syncBadge = nodePendingOps.length > 0
+    ? `<span class="text-xs font-semibold px-2 py-0.5 rounded-full ${isOnline ? "bg-blue-500/20 text-blue-300" : "bg-amber-500/20 text-amber-300 anim-pulse"}">${isOnline ? `↻ ${nodePendingOps.length}` : `${nodePendingOps.length} pending`}</span>`
+    : "";
+  card.querySelector(SELECTORS.metaRow).innerHTML = `
+    <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">${active} items</span>
+    <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">v${version}</span>
+    ${syncBadge}`;
+
+  // ── Cart items ──
+  const itemsHTML = Object.entries(items)
+    .map(([name, info]) => renderItemHTML(name, info, n.id, n.p))
+    .join("") ||
+    (isOnline
+      ? `<div class="text-slate-500 text-center py-8 text-sm">Giỏ hàng trống</div>`
+      : `<div class="text-slate-500 text-center py-8 text-sm"><i class="fa-solid fa-plug-circle-xmark mb-2 block text-xl"></i>Giỏ hàng trống (Offline)</div>`);
+  card.querySelector(SELECTORS.cartItems).innerHTML = itemsHTML;
+
+  card.querySelector(SELECTORS.rawDataView).innerText = JSON.stringify(displayData.raw_data, null, 2);
 };
 
-// ─── Dynamic Node Renderer (Tailwind) ─────────────────────────────
+// ─── Update UI ────────────────────────────────────────────────────
+export const updateUI = async () => {
+  const sid = getSessionId();
+  NODES.forEach(async (n) => {
+    // 1. Render optimistic UI immediately using cached data and current nodeStatus
+    const cachedData = getLocalCart(sid, n.id) || getDefaultCart(sid);
+    renderNodeUI(n, nodeStatus[n.id], cachedData, sid);
+
+    // 2. Fetch fresh data from backend
+    if (nodeUpdating[n.id]) return;
+    nodeUpdating[n.id] = true;
+    try {
+      const data = await call(n.p, `/cart/${sid}`);
+      const isOnline = !!data;
+      // 3. Render again with fresh data
+      renderNodeUI(n, isOnline, data, sid);
+    } finally {
+      nodeUpdating[n.id] = false;
+    }
+  });
+};
+
+// ─── Dynamic Node Renderer ─────────────────────────────────────────
 export const addDynamicNode = (nodeId, port, label, icon) => {
   const dashboard = document.getElementById("dashboard");
   const logPanel  = document.getElementById("activity-log-panel");

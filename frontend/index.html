@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="vi">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -11,10 +12,11 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
-      theme: { extend: { fontFamily: { sans: ['Inter','sans-serif'] } } }
+      theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } }
     }
   </script>
 </head>
+
 <body class="bg-slate-950 text-slate-100 min-h-screen overflow-x-hidden relative font-sans">
 
   <!-- Background Shapes -->
@@ -33,11 +35,9 @@
 
     <!-- Controls -->
     <div class="flex justify-center gap-3 items-center flex-wrap">
-      <button id="btn-sync-all" class="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 hover:-translate-y-0.5">
+      <button id="btn-sync-all"
+        class="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 hover:-translate-y-0.5">
         <i class="fa-solid fa-rotate"></i> Global Sync
-      </button>
-      <button id="btn-add-node" title="Horizontal Scaling" class="bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-400 border border-emerald-500/40 px-5 py-2 rounded-lg font-bold transition-all duration-200 flex items-center gap-2 hover:-translate-y-0.5">
-        <i class="fa-solid fa-plus"></i> Add Node
       </button>
     </div>
   </header>
@@ -46,8 +46,9 @@
   <main class="grid grid-cols-1 lg:grid-cols-3 gap-6 px-6 pb-8 max-w-screen-2xl mx-auto" id="dashboard">
 
     <!-- Node A — Phone -->
-    <div class="bg-slate-800/70 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-xl flex flex-col h-[750px] transition-all duration-300"
-         id="card-node-A" data-node="A" data-port="5001">
+    <div
+      class="bg-slate-800/70 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-xl flex flex-col h-[750px] transition-all duration-300"
+      id="card-node-A" data-node="A" data-port="5001">
       <div class="px-4 py-3 bg-white/[0.03] border-b border-white/10 flex flex-col gap-2 flex-shrink-0">
         <div class="flex justify-between items-center">
           <h2 class="text-base font-semibold flex items-center gap-2">
@@ -63,27 +64,34 @@
       </div>
       <div class="p-5 flex-1 flex flex-col overflow-hidden">
         <div class="add-item-form flex gap-2 mb-4 flex-shrink-0">
-          <input type="text" class="input-item flex-1 bg-slate-900/80 border border-white/10 text-slate-100 px-3 py-2 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-sm" placeholder="Nhập tên sản phẩm..." />
-          <button class="btn-add bg-white/10 hover:bg-blue-500 text-white px-3 py-2 rounded-lg font-semibold transition-all duration-200">
+          <input type="text"
+            class="input-item flex-1 bg-slate-900/80 border border-white/10 text-slate-100 px-3 py-2 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-sm"
+            placeholder="Nhập tên sản phẩm..." />
+          <button
+            class="btn-add bg-white/10 hover:bg-blue-500 text-white px-3 py-2 rounded-lg font-semibold transition-all duration-200">
             <i class="fa-solid fa-plus"></i>
           </button>
         </div>
         <div class="cart-items flex flex-col gap-3 flex-1 overflow-y-auto pr-1 mb-3 scrollbar-slim"></div>
         <div class="raw-data-toggle flex-shrink-0 pt-3 border-t border-white/5 flex justify-center gap-2">
-          <button onclick="clearHistory('A',5001)" class="btn-clear-history text-amber-400 border border-amber-400/40 hover:bg-amber-400/10 text-xs px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5">
+          <button onclick="clearHistory('A',5001)"
+            class="btn-clear-history text-amber-400 border border-amber-400/40 hover:bg-amber-400/10 text-xs px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5">
             <i class="fa-solid fa-broom"></i> Clean Tombstones
           </button>
-          <button class="btn-raw text-slate-400 border border-white/10 hover:bg-white/5 hover:text-white text-xs px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5">
+          <button
+            class="btn-raw text-slate-400 border border-white/10 hover:bg-white/5 hover:text-white text-xs px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5">
             <i class="fa-solid fa-code"></i> Raw Data
           </button>
         </div>
-        <pre class="raw-data-view hidden mt-3 bg-black/50 p-4 rounded-lg text-xs overflow-x-auto text-violet-400 font-mono"></pre>
+        <pre
+          class="raw-data-view hidden mt-3 bg-black/50 p-4 rounded-lg text-xs overflow-x-auto text-violet-400 font-mono"></pre>
       </div>
     </div>
 
     <!-- Node B — Laptop -->
-    <div class="bg-slate-800/70 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-xl flex flex-col h-[750px] transition-all duration-300"
-         id="card-node-B" data-node="B" data-port="5002">
+    <div
+      class="bg-slate-800/70 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-xl flex flex-col h-[750px] transition-all duration-300"
+      id="card-node-B" data-node="B" data-port="5002">
       <div class="px-4 py-3 bg-white/[0.03] border-b border-white/10 flex flex-col gap-2 flex-shrink-0">
         <div class="flex justify-between items-center">
           <h2 class="text-base font-semibold flex items-center gap-2">
@@ -99,58 +107,35 @@
       </div>
       <div class="p-5 flex-1 flex flex-col overflow-hidden">
         <div class="add-item-form flex gap-2 mb-4 flex-shrink-0">
-          <input type="text" class="input-item flex-1 bg-slate-900/80 border border-white/10 text-slate-100 px-3 py-2 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-sm" placeholder="Nhập tên sản phẩm..." />
-          <button class="btn-add bg-white/10 hover:bg-blue-500 text-white px-3 py-2 rounded-lg font-semibold transition-all duration-200">
+          <input type="text"
+            class="input-item flex-1 bg-slate-900/80 border border-white/10 text-slate-100 px-3 py-2 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-sm"
+            placeholder="Nhập tên sản phẩm..." />
+          <button
+            class="btn-add bg-white/10 hover:bg-blue-500 text-white px-3 py-2 rounded-lg font-semibold transition-all duration-200">
             <i class="fa-solid fa-plus"></i>
           </button>
         </div>
         <div class="cart-items flex flex-col gap-3 flex-1 overflow-y-auto pr-1 mb-3 scrollbar-slim"></div>
         <div class="raw-data-toggle flex-shrink-0 pt-3 border-t border-white/5 flex justify-center gap-2">
-          <button onclick="clearHistory('B',5002)" class="btn-clear-history text-amber-400 border border-amber-400/40 hover:bg-amber-400/10 text-xs px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5">
+          <button onclick="clearHistory('B',5002)"
+            class="btn-clear-history text-amber-400 border border-amber-400/40 hover:bg-amber-400/10 text-xs px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5">
             <i class="fa-solid fa-broom"></i> Clean Tombstones
           </button>
-          <button class="btn-raw text-slate-400 border border-white/10 hover:bg-white/5 hover:text-white text-xs px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5">
+          <button
+            class="btn-raw text-slate-400 border border-white/10 hover:bg-white/5 hover:text-white text-xs px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5">
             <i class="fa-solid fa-code"></i> Raw Data
           </button>
         </div>
-        <pre class="raw-data-view hidden mt-3 bg-black/50 p-4 rounded-lg text-xs overflow-x-auto text-violet-400 font-mono"></pre>
+        <pre
+          class="raw-data-view hidden mt-3 bg-black/50 p-4 rounded-lg text-xs overflow-x-auto text-violet-400 font-mono"></pre>
       </div>
     </div>
 
   </main>
 
-  <!-- Add Node Modal -->
-  <div id="add-node-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-    <div class="bg-slate-800 border border-white/10 rounded-2xl w-11/12 max-w-md flex flex-col shadow-2xl anim-fade-in">
-      <div class="flex justify-between items-center px-6 py-5 border-b border-white/10">
-        <h2 class="text-lg font-bold flex items-center gap-2 text-violet-300">
-          <i class="fa-solid fa-server"></i> Thêm Node Mới
-        </h2>
-        <button id="btn-close-add-node" class="text-slate-400 hover:text-white hover:bg-white/10 w-8 h-8 rounded-lg flex items-center justify-center transition-all text-lg">&times;</button>
-      </div>
-      <div class="p-6">
-        <p class="text-slate-400 text-sm mb-4 leading-relaxed">
-          Minh hoạ <strong class="text-slate-200">Horizontal Scaling</strong>: thêm node mới vào cluster. Node sẽ tự sync dữ liệu qua Anti-Entropy CRDT.
-        </p>
-        <div class="bg-violet-500/10 border border-violet-500/20 rounded-xl p-4 mb-4 text-sm text-slate-400">
-          <p class="font-semibold text-violet-300 mb-2">📐 CAP — AP Model (W=1)</p>
-          <ul class="space-y-1 text-xs">
-            <li><strong class="text-slate-300">W=1:</strong> Ghi cục bộ → phản hồi ngay</li>
-            <li><strong class="text-slate-300">R=1:</strong> Đọc từ node cục bộ, không quorum</li>
-            <li><strong class="text-slate-300">CRDT:</strong> Merge đảm bảo eventual consistency</li>
-          </ul>
-        </div>
-        <label class="block text-xs text-slate-400 mb-1.5">Tên node mới:</label>
-        <input type="text" id="new-node-name" class="w-full bg-slate-900/80 border border-white/10 text-slate-100 px-3 py-2 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-sm" placeholder="Ví dụ: Tablet, Smart TV..." />
-      </div>
-      <div class="px-6 py-4 border-t border-white/10 flex justify-end">
-        <button id="btn-confirm-add-node" class="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2 rounded-lg font-semibold transition-all flex items-center gap-2">
-          <i class="fa-solid fa-plus"></i> Thêm Node
-        </button>
-      </div>
-    </div>
-  </div>
+
 
   <script type="module" src="app-main.js"></script>
 </body>
+
 </html>

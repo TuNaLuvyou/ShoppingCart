@@ -1,7 +1,4 @@
-import os
-import json
-import argparse
-import requests
+import os, json, copy, argparse, threading, requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from core.vector_clock import increment_clock
@@ -10,171 +7,147 @@ from core.merge import merge_carts
 app = Flask(__name__)
 CORS(app)
 
-# Hằng số cấu hình
 NODE_ID      = os.environ.get("NODE_ID", "A")
 PEERS        = list(filter(None, os.environ.get("PEERS", "").split(",")))
-STORAGE_DIR  = "storage"
-STORAGE_FILE = f"{STORAGE_DIR}/node_{NODE_ID}_db.json"
-REQUEST_TIMEOUT = 1
-SYNC_TIMEOUT    = 2
+STORAGE_FILE = f"storage/node_{NODE_ID}_db.json"
 
-# ─── In-Memory Cache ───────────────────────────────────────────────
-# Bộ nhớ tạm để tránh đọc file JSON mỗi request
 _db_cache = None
+db_lock   = threading.Lock()
 
+# ─── Database helpers ──────────────────────────────────────────────
 def load_db():
-    """Đọc database từ cache (in-memory) hoặc file, nếu cache trống. R=1"""
+    """Đọc database từ In-memory Cache (R=1).
+    Ưu tiên cache để tránh đọc file mỗi request, chỉ đọc file khi cache trống."""
     global _db_cache
-    if _db_cache is not None:
+    with db_lock:
+        if _db_cache is None:
+            try:
+                with open(STORAGE_FILE, "r", encoding="utf-8") as f:
+                    _db_cache = json.load(f)
+            except Exception:
+                _db_cache = {}
         return _db_cache
-    if os.path.exists(STORAGE_FILE):
-        with open(STORAGE_FILE, "r") as f:
-            _db_cache = json.load(f)
-    else:
-        _db_cache = {}
-    return _db_cache
 
 def save_db(db):
-    """Ghi database vào cache và file (persistence). W=1"""
+    """Ghi database vào Cache và file JSON (W=1 — Persistence).
+    Dùng Lock để tránh Race Condition khi API và Anti-Entropy ghi đồng thời."""
     global _db_cache
-    _db_cache = db
-    os.makedirs(STORAGE_DIR, exist_ok=True)
-    with open(STORAGE_FILE, "w") as f:
-        json.dump(db, f, indent=4)
+    with db_lock:
+        _db_cache = db
+        os.makedirs("storage", exist_ok=True)
+        with open(STORAGE_FILE, "w", encoding="utf-8") as f:
+            json.dump(db, f, indent=4, ensure_ascii=False)
 
-# ─── Helper Functions ──────────────────────────────────────────────
+def get_cart(db, sid):
+    """Lấy giỏ hàng theo Session ID. Tự khởi tạo giỏ rỗng nếu chưa tồn tại."""
+    if sid not in db:
+        db[sid] = {"version": 0, "items": {}}
+    return db[sid]
 
-def _get_cart(db, session_id):
-    """Lấy hoặc tạo mới giỏ hàng cho phiên (session)."""
-    if session_id not in db:
-        db[session_id] = {"version": 0, "items": {}}
-    return db[session_id]
-
-def _replicate_to_peers(session_id, cart): # Gửi dữ liệu qua các node còn lại
-    """Active Replication: gửi cart tới tất cả node khác (fire-and-forget, W=1)."""
-    for peer in PEERS: # chuyển dữ liệu qua các node còn lại!
+# ─── Anti-Entropy ──────────────────────────────────────────────────
+def sync_with_peers(): # Sau khi mở rộng bằng docker xong thì hệ thống sẽ tự động merge dữ liệu qua
+    """Passive Anti-Entropy: kéo toàn bộ dữ liệu từ các peer và thực hiện CRDT-merge.
+    Chỉ ghi file xuống đĩa khi có sự thay đổi thực sự, tránh ghi thừa."""
+    db, changed = load_db(), False
+    for peer in PEERS: # Bắt đầu vòng lập đưa dữ liệu qua
         try:
-            requests.post(f"{peer}/replicate/{session_id}", json=cart, timeout=REQUEST_TIMEOUT)
-        except requests.exceptions.RequestException:
-            pass  # Peer offline → sync lại sau qua Anti-Entropy
+            resp = requests.get(f"{peer}/dump", timeout=2)
+            if resp.ok:
+                for sid, incoming in resp.json().items():
+                    local = get_cart(db, sid)
+                    merged = merge_carts(local, incoming)
+                    if json.dumps(merged, sort_keys=True) != json.dumps(local, sort_keys=True):
+                        db[sid] = merged
+                        changed = True
+        except Exception:
+            pass
+    if changed:
+        save_db(db)
+    return db
 
-# ─── Cart API ──────────────────────────────────────────────────────
-
-@app.route('/cart/<session_id>', methods=['GET'])
-def get_cart(session_id):  # hiển thị danh sách sản phẩm
+# ─── API Routes ────────────────────────────────────────────────────
+@app.get("/cart/<sid>")
+def api_get_cart(sid):
+    """[GET] Trả về danh sách sản phẩm của giỏ hàng (giao diện tự gọi định kỳ để cập nhật UI).
+    Lọc ẩn các Tombstone (status=deleted) khỏi người dùng, chỉ hiển thị sản phẩm active."""
     db   = load_db()
-    cart = _get_cart(db, session_id)
-    # Ẩn các item đã bị xóa (Tombstone) khỏi người dùng
-    active_items = [k for k, v in cart["items"].items() if v["status"] == "active"]
-    return jsonify({
-        "session_id":   session_id,
-        "version":      cart.get("version", 0),
-        "active_items": active_items,
-        "raw_data":     cart
-    })
+    cart = get_cart(db, sid)
+    active = [k for k, v in cart["items"].items() if v["status"] == "active"]
+    return jsonify({"session_id": sid, "version": cart["version"], "active_items": active, "raw_data": cart})
 
-@app.route('/cart/<session_id>/<action>', methods=['POST'])
-def modify_cart(session_id, action): # thêm hoặc xóa sản phẩm
-    if action not in ["add", "remove", "increase", "decrease"]:
+@app.post("/cart/<sid>/<action>")
+def api_modify(sid, action):
+    """[POST] Thêm (add) hoặc xóa logic (remove) sản phẩm khỏi giỏ hàng
+    (khi người dùng bấm nút [+] hoặc nút [Xóa] trên giao diện).
+    Xóa dùng cơ chế Tombstone (status=deleted) để giữ lịch sử và đồng bộ xung đột đúng.
+    Sau khi ghi cục bộ (W=1), tự động replicate sang tất cả peer dưới nền."""
+
+    if action not in ("add", "remove"):
         return jsonify({"error": "Invalid action"}), 400
-
-    item_name = request.json.get("item") if request.json else None
-    if not item_name:
+    item = (request.json or {}).get("item", "").strip().title()
+    if not item:
         return jsonify({"error": "Item name required"}), 400
 
-    # Chuẩn hóa tên sản phẩm
-    item_name = item_name.strip().title()
+    db   = load_db()
+    cart = get_cart(db, sid)
+    curr = cart["items"].get(item, {"status": "active", "vclock": {}})
+    cart["items"][item] = {"status": "active" if action == "add" else "deleted",
+                           "vclock": increment_clock(curr["vclock"], NODE_ID)}
+    cart["version"] += 1
+    save_db(db)
 
-    db = load_db()  # R = 1
-    cart = _get_cart(db, session_id)
-    current_item = cart["items"].get(item_name, {"status": "active", "vclock": {}, "quantity": {}})
+    # Active replication — fire-and-forget (W=1)
+    snapshot = copy.deepcopy(cart)
+    def replicate():
+        for peer in PEERS:
+            try:
+                requests.post(f"{peer}/replicate/{sid}", json=snapshot, timeout=1)
+            except Exception:
+                pass
+    threading.Thread(target=replicate, daemon=True).start() # Luồng chạy ngầm
+    return jsonify({"message": f"{item} {action}d at Node {NODE_ID}", "version": cart["version"], "cart": cart})
 
-    qty_dict = dict(current_item.get("quantity", {}))  # copy để tránh lỗi tham chiếu
-
-    current_node_qty = qty_dict.get(NODE_ID, 0)
-
-    if action == "add":
-        status = "active"
-        # Nếu item đã bị xóa trước đó, reset số lượng về 1
-        qty_dict = {NODE_ID: 1} if current_item.get("status") == "deleted" else {NODE_ID: current_node_qty + 1}
-    elif action == "increase":
-        status = "active"
-        qty_dict[NODE_ID] = current_node_qty + 1
-    elif action == "decrease":
-        status = "active"
-        qty_dict[NODE_ID] = max(0, current_node_qty - 1)
-    else:  # remove: đánh dấu Tombstone (deleted), xóa logic
-        status   = "deleted"
-        qty_dict = {}
-
-    new_vclock = increment_clock(current_item.get("vclock", {}), NODE_ID)
-
-    cart["items"][item_name] = {"status": status, "vclock": new_vclock, "quantity": qty_dict}
-    cart["version"] = cart.get("version", 0) + 1
-    save_db(db)  # W = 1
-
-    # Active Replication — W=1: ghi cục bộ xong là trả về ngay,
-    # replication sang peer là fire-and-forget (đảm bảo Availability).
-    _replicate_to_peers(session_id, cart)
-
-    return jsonify({"message": f"Item {action}ed at Node {NODE_ID}", "version": cart.get("version", 0), "cart": cart})
-
-# ─── Replication & Sync ────────────────────────────────────────────
-
-@app.route('/replicate/<session_id>', methods=['POST'])  # tự động merge dữ liệu nhận từ node khác
-def replicate(session_id):
-    """Active Replication: nhận cart từ peer và CRDT-merge"""
-    incoming_cart = request.json
-    db            = load_db()
-    local_cart    = _get_cart(db, session_id)
-    db[session_id] = merge_carts(local_cart, incoming_cart)
+@app.post("/replicate/<sid>")
+def api_replicate(sid):
+    """[POST] Nhận dữ liệu replicate từ peer và thực hiện CRDT-merge với bản cục bộ
+    (tự động gọi ngầm khi một node khác bấm [+] hoặc [Xoá] — Active Replication).
+    Người dùng không thấy bước này, hệ thống tự xử lý dưới nền."""
+    db = load_db()
+    db[sid] = merge_carts(get_cart(db, sid), request.json)
     save_db(db)
     return jsonify({"status": "replicated"})
 
-@app.route('/sync', methods=['POST'])  # khi mất mạng kết nối lại thì sẽ bắt đầu sync (giải quyết xung đột)
-def sync_all():
-    """Passive Anti-Entropy: pull toàn bộ data từ peers và CRDT-merge"""
-    db = load_db()
-    for peer in PEERS:
-        if peer:
-            try:
-                resp = requests.get(f"{peer}/dump", timeout=SYNC_TIMEOUT)
-                if resp.status_code == 200:
-                    peer_db = resp.json()
-                    for session_id, incoming_cart in peer_db.items():
-                        local_cart     = _get_cart(db, session_id)
-                        db[session_id] = merge_carts(local_cart, incoming_cart)
-            except requests.exceptions.RequestException:
-                pass
-    save_db(db)
-    return jsonify({"status": "synced", "db": db})
+@app.post("/sync")
+def api_sync():
+    """[POST] Kích hoạt Anti-Entropy thủ công (khi người dùng bấm nút [Global Sync] trên giao diện).
+    Kéo toàn bộ dữ liệu từ các peer online, thực hiện CRDT-merge và trả về trạng thái sau khi hội tụ."""
+    return jsonify({"status": "synced", "db": sync_with_peers()})
 
-@app.route('/dump', methods=['GET'])
-def dump():
-    """Trích xuất toàn bộ database cho Anti-Entropy sync"""
+@app.get("/dump")
+def api_dump():
+    """[GET] Xuất toàn bộ dữ liệu thô của node
+    (tự động gọi ngầm khi một node khác bấm [Global Sync] — để lấy data về merge)."""
     return jsonify(load_db())
 
-@app.route('/health', methods=['GET'])
-def health_check():
+@app.get("/health")
+def api_health():
+    """[GET] Kiểm tra trạng thái hoạt động của node
+    (giao diện tự gọi định kỳ để hiển thị Online/Offline)."""
     return jsonify({"status": "ok", "node": NODE_ID})
 
-@app.route('/clear', methods=['POST'])
-def clear_db():
-    """Dọn Tombstone: xóa vật lý các item đã bị đánh dấu 'deleted'"""
+@app.post("/clear")
+def api_clear():
+    """[POST] Dọn dẹp Tombstone: xóa vật lý các sản phẩm đã bị đánh dấu deleted
+    (khi người dùng bấm nút [Clean Tombstones] trên giao diện).
+    Lưu ý: chỉ thực hiện sau khi chắc chắn tất cả node đã đồng bộ xong."""
     db = load_db()
-    for session_id, cart in db.items():
-        # Chỉ giữ lại các sản phẩm đang active, xóa các Tombstone
-        cart["items"] = {
-            k: v for k, v in cart["items"].items()
-            if v["status"] == "active"
-        }
-        cart["version"] = cart.get("version", 0) + 1
+    for cart in db.values():
+        cart["items"] = {k: v for k, v in cart["items"].items() if v["status"] == "active"}
     save_db(db)
     return jsonify({"status": "cleaned"})
 
 # ──────────────────────────────────────────────────────────────────
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=5001)
     args = parser.parse_args()
