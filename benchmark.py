@@ -21,8 +21,8 @@ def benchmark():
 
     # 1. Khởi tạo
     start = time.perf_counter()
-    cart_A = {"version": 0, "items": {}}
-    cart_B = {"version": 0, "items": {}}
+    cart_A = {"version": 0, "ItemList": {}}
+    cart_B = {"version": 0, "ItemList": {}}
     t_init = (time.perf_counter() - start) * 1000
     print_stage("1. Khởi tạo 2 giỏ hàng rỗng", t_init)
 
@@ -31,7 +31,7 @@ def benchmark():
     start = time.perf_counter()
     for i in range(NUM_ITEMS):
         item_name = f"Item_{i}"
-        cart_A["items"][item_name] = {
+        cart_A["ItemList"][item_name] = {
             "status": "active", 
             "vclock": {"A": 1}
         }
@@ -51,12 +51,12 @@ def benchmark():
     start = time.perf_counter()
     for i in range(NUM_ITEMS, NUM_ITEMS + 5000):
         item_name = f"Item_{i}"
-        cart_A["items"][item_name] = {"status": "active", "vclock": {"A": 1}}
+        cart_A["ItemList"][item_name] = {"status": "active", "vclock": {"A": 1}}
     
     for i in range(5000):
         item_name = f"Item_{i}"
-        cart_B["items"][item_name]["status"] = "deleted"
-        cart_B["items"][item_name]["vclock"] = increment_clock(cart_B["items"][item_name]["vclock"], "B")
+        cart_B["ItemList"][item_name]["status"] = "deleted"
+        cart_B["ItemList"][item_name]["vclock"] = increment_clock(cart_B["ItemList"][item_name]["vclock"], "B")
     t_diverge = (time.perf_counter() - start) * 1000
     print_stage("4. Mất mạng: A thêm 5k món mới, B xóa 5k món cũ", t_diverge)
 
@@ -69,11 +69,11 @@ def benchmark():
     # In kết quả tổng kết
     print("\n" + "="*80)
     print("📊 TỔNG KẾT BENCHMARK:")
-    print(f"   - Tổng số món hàng xử lý: {len(final_cart['items']):,} items")
+    print(f"   - Tổng số món hàng xử lý: {len(final_cart['ItemList']):,} items")
     print(f"   - Thời gian thuật toán xử lý xung đột (Merge): {t_merge:.3f} mili-giây")
     
     # Tính ops/sec cho merge (Số phép tính mỗi giây)
-    ops = len(final_cart['items']) / (t_merge / 1000)
+    ops = len(final_cart['ItemList']) / (t_merge / 1000)
     print(f"   - Tốc độ Hợp nhất: {ops:,.0f} phép tính / giây")
     print("   -> KẾT LUẬN: Thuật toán CRDT State-based của bạn chạy cực kỳ nhanh và")
     print("      tiêu tốn cực ít tài nguyên khi xử lý xung đột dữ liệu khổng lồ!")
